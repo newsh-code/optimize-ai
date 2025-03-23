@@ -366,7 +366,14 @@ submitBtn.addEventListener('click', async () => {
     if (currentResults) {
       currentResults.hypothesis = hypothesis;
       currentResults.suggestedChanges = response.suggested_changes || [];
-      currentResults.annotations = response.annotations || [];
+      
+      // Update annotations if we have new ones
+      if (response.annotations && response.annotations.length > 0) {
+        currentResults.annotations = response.annotations;
+        // Update the annotations display
+        displayAnnotations(response.annotations);
+        annotationsContainer.classList.remove('hidden');
+      }
     }
     
     // Store current suggestions
@@ -414,12 +421,6 @@ function displayAnalysisResults(results) {
 
 // Display variation results with suggestions
 function displayVariationResults(results) {
-  // Display annotations if available
-  if (results.annotations && results.annotations.length > 0) {
-    displayAnnotations(results.annotations);
-    annotationsContainer.classList.remove('hidden');
-  }
-  
   // Display suggestions
   if (results.suggested_changes && results.suggested_changes.length > 0) {
     displaySuggestions(results.suggested_changes);
