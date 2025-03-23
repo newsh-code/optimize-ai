@@ -301,8 +301,27 @@ button {
   color: #155724;
   padding: 10px 15px;
   border-radius: 4px;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
   border: 1px solid #c3e6cb;
+}
+
+.additional-info {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 15px;
+}
+
+.additional-info a {
+  color: #0d6efd;
+  text-decoration: none;
+}
+
+.additional-info a:hover {
+  text-decoration: underline;
 }
 
 #review-container {

@@ -4,6 +4,16 @@
 // Store information about visible elements
 let visibleElements = new Set();
 
+// Store original element states to allow toggling
+let originalElementStates = new Map();
+let toggleState = 'modified';
+
+// Flag to track if changes are currently applied
+let changesApplied = false;
+
+// Store the last applied changes
+let lastAppliedChanges = [];
+
 // Initialize the IntersectionObserver to track visible elements
 function initVisibilityObserver() {
   const observer = new IntersectionObserver(
@@ -110,82 +120,241 @@ function log(...args) {
   console.log("[AI Webpage Experimenter - Content]", ...args);
 }
 
-// Function to apply changes to the DOM
-function applyChangesToDOM(changes) {
-  log("Applying", changes.length, "changes to DOM");
+// Store the original state of an element before modification
+function storeOriginalState(element) {
+  const elementId = getElementUniqueIdentifier(element);
   
-  if (!changes || !Array.isArray(changes) || changes.length === 0) {
-    log("No changes to apply");
-    return;
-  }
-  
-  changes.forEach(change => {
-    try {
-      const elements = document.querySelectorAll(change.element);
-      log(`Found ${elements.length} elements matching selector: ${change.element}`);
-      
-      if (elements.length === 0) {
-        log(`No elements found for selector: ${change.element}`);
-        return;
-      }
-      
-      elements.forEach(element => {
-        applyChangeToElement(element, change);
-      });
-    } catch (error) {
-      log(`Error applying change to ${change.element}:`, error);
+  if (!originalElementStates.has(elementId)) {
+    const originalState = {
+      textContent: element.textContent,
+      style: {},
+      attributes: {}
+    };
+    
+    // Store original styles
+    const computedStyle = window.getComputedStyle(element);
+    const importantStyles = [
+      'color', 'backgroundColor', 'fontSize', 'fontWeight', 'margin', 'padding',
+      'display', 'position', 'width', 'height', 'transform', 'border',
+      'borderRadius', 'boxShadow', 'textAlign', 'lineHeight'
+    ];
+    
+    importantStyles.forEach(style => {
+      originalState.style[style] = element.style[style] || computedStyle[style];
+    });
+    
+    // Store original attributes
+    for (const attr of element.attributes) {
+      originalState.attributes[attr.name] = attr.value;
     }
-  });
-  
-  log("All changes applied successfully");
+    
+    originalElementStates.set(elementId, originalState);
+    log(`Stored original state for ${element.tagName}${elementId}`);
+  }
 }
 
-// Apply a single change to an element
-function applyChangeToElement(element, change) {
-  const { action, value } = change;
+// Generate a unique identifier for an element
+function getElementUniqueIdentifier(element) {
+  return `#${element.id || ''}.${Array.from(element.classList).join('.')}:${getXPath(element)}`;
+}
+
+// Function to apply changes to the DOM
+function applyChangesToDOM(suggestions) {
+  log(`Applying ${suggestions.length} changes to DOM`);
   
-  switch (action) {
-    case 'change_text':
-      log(`Changing text of ${element.tagName} to: ${value}`);
-      element.textContent = value;
-      break;
-    
-    case 'change_style':
-      log(`Changing style of ${element.tagName}`);
-      if (typeof value === 'object') {
-        Object.keys(value).forEach(prop => {
-          element.style[prop] = value[prop];
+  // Clear existing modifications if there are any
+  if (toggleState === 'original') {
+    toggleState = 'modified';
+    const toggleButton = document.getElementById('ai-toggle-button');
+    if (toggleButton) {
+      toggleButton.textContent = 'View Original';
+    }
+  }
+  
+  let changesMade = 0;
+  
+  try {
+    for (const suggestion of suggestions) {
+      if (!suggestion.elementInfo || !suggestion.elementInfo.xpath) {
+        log('Missing elementInfo or xpath in suggestion', suggestion);
+        continue;
+      }
+      
+      const element = getElementByXPath(suggestion.elementInfo.xpath);
+      if (!element) {
+        log(`Element not found for xpath: ${suggestion.elementInfo.xpath}`);
+        continue;
+      }
+      
+      saveOriginalState(element, suggestion.action);
+      
+      if (suggestion.action === 'change_text' && suggestion.newText) {
+        log(`Changing text for element ${suggestion.elementInfo.xpath}`);
+        element.textContent = suggestion.newText;
+        changesMade++;
+      } else if (suggestion.action === 'change_style' && suggestion.styleChanges) {
+        log(`Changing style for element ${suggestion.elementInfo.xpath}`);
+        Object.keys(suggestion.styleChanges).forEach(property => {
+          element.style[property] = suggestion.styleChanges[property];
         });
-      }
-      break;
-    
-    case 'change_attribute':
-      log(`Changing attribute ${value.name} of ${element.tagName} to: ${value.value}`);
-      if (value && value.name) {
-        element.setAttribute(value.name, value.value);
-      }
-      break;
-    
-    case 'increase_size':
-      log(`Increasing size of ${element.tagName}`);
-      if (typeof value === 'object') {
-        Object.keys(value).forEach(prop => {
-          element.style[prop] = value[prop];
+        changesMade++;
+      } else if (suggestion.action === 'change_attribute' && suggestion.attributeChanges) {
+        log(`Changing attributes for element ${suggestion.elementInfo.xpath}`);
+        Object.keys(suggestion.attributeChanges).forEach(attribute => {
+          element.setAttribute(attribute, suggestion.attributeChanges[attribute]);
         });
-      } else {
-        // Default size increase
-        element.style.transform = 'scale(1.2)';
-        element.style.transformOrigin = 'center';
+        changesMade++;
+      } else if (suggestion.action === 'change_size' && suggestion.sizeChanges) {
+        log(`Changing size for element ${suggestion.elementInfo.xpath}`);
+        if (suggestion.sizeChanges.width) {
+          element.style.width = suggestion.sizeChanges.width;
+        }
+        if (suggestion.sizeChanges.height) {
+          element.style.height = suggestion.sizeChanges.height;
+        }
+        changesMade++;
+      } else if (suggestion.action === 'change_color' && suggestion.colorChanges) {
+        log(`Changing color for element ${suggestion.elementInfo.xpath}`);
+        if (suggestion.colorChanges.textColor) {
+          element.style.color = suggestion.colorChanges.textColor;
+        }
+        if (suggestion.colorChanges.backgroundColor) {
+          element.style.backgroundColor = suggestion.colorChanges.backgroundColor;
+        }
+        changesMade++;
       }
-      break;
+    }
     
-    case 'change_color':
-      log(`Changing color of ${element.tagName} to: ${value}`);
-      element.style.color = value;
-      break;
+    // Create toggle button after changes are applied
+    if (changesMade > 0) {
+      createToggleButton();
+    }
     
-    default:
-      log(`Unknown action: ${action} for ${element.tagName}`);
+    log(`Successfully applied ${changesMade} changes to DOM`);
+    return { success: true, changesMade };
+  } catch (error) {
+    log(`Error applying changes to DOM: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to get element by XPath
+function getElementByXPath(xpath) {
+  return document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+}
+
+// Create toggle button function
+function createToggleButton() {
+  const existingButton = document.getElementById('ai-toggle-button');
+  if (existingButton) {
+    return existingButton;
+  }
+
+  const toggleButton = document.createElement('button');
+  toggleButton.id = 'ai-toggle-button';
+  toggleButton.textContent = 'View Original';
+  toggleButton.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    padding: 8px 12px;
+    background-color: #3367d6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: background-color 0.2s;
+  `;
+
+  toggleButton.addEventListener('mouseover', () => {
+    toggleButton.style.backgroundColor = '#4285f4';
+  });
+
+  toggleButton.addEventListener('mouseout', () => {
+    toggleButton.style.backgroundColor = '#3367d6';
+  });
+
+  toggleButton.addEventListener('click', togglePageVersion);
+  
+  document.body.appendChild(toggleButton);
+  return toggleButton;
+}
+
+// Toggle between original and modified states
+function togglePageVersion() {
+  const toggleButton = document.getElementById('ai-toggle-button');
+  
+  if (toggleState === 'modified') {
+    // Switch to original
+    originalElementStates.forEach((originalState, elementId) => {
+      const element = document.getElementById(elementId);
+      if (element) {
+        if (originalState.text !== undefined) element.textContent = originalState.text;
+        if (originalState.style) Object.assign(element.style, originalState.style);
+        if (originalState.className) element.className = originalState.className;
+        if (originalState.attributes) {
+          for (const [attr, value] of Object.entries(originalState.attributes)) {
+            element.setAttribute(attr, value);
+          }
+        }
+      }
+    });
+    toggleState = 'original';
+    toggleButton.textContent = 'View Modified';
+  } else {
+    // Switch back to modified
+    chrome.runtime.sendMessage({ action: 'getSuggestions' }, (response) => {
+      if (response && response.suggestions) {
+        applyChangesToDOM(response.suggestions);
+      }
+    });
+    toggleState = 'modified';
+    toggleButton.textContent = 'View Original';
+  }
+}
+
+// Save original element state before modifying
+function saveOriginalState(element, changeType) {
+  if (!originalElementStates.has(element.id)) {
+    // Generate a unique ID if the element doesn't have one
+    if (!element.id) {
+      element.id = 'ai-modified-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    }
+    
+    const originalState = {
+      text: element.textContent,
+      style: {},
+      className: element.className,
+      attributes: {}
+    };
+
+    // Store original styles if we're changing styles
+    if (changeType.includes('style')) {
+      const computedStyle = window.getComputedStyle(element);
+      originalState.style = {
+        color: computedStyle.color,
+        backgroundColor: computedStyle.backgroundColor,
+        fontFamily: computedStyle.fontFamily,
+        fontSize: computedStyle.fontSize,
+        fontWeight: computedStyle.fontWeight,
+        padding: computedStyle.padding,
+        margin: computedStyle.margin,
+        border: computedStyle.border,
+        width: computedStyle.width,
+        height: computedStyle.height
+      };
+    }
+
+    // Store attributes
+    for (const attr of element.getAttributeNames()) {
+      originalState.attributes[attr] = element.getAttribute(attr);
+    }
+
+    originalElementStates.set(element.id, originalState);
   }
 }
 
@@ -209,6 +378,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log("Applying changes to DOM, count:", changes.length);
     
     try {
+      // Reset state for new changes
+      if (changesApplied) {
+        restoreOriginalState();
+        originalElementStates.clear();
+      }
+      
       applyChangesToDOM(changes);
       log("Changes applied successfully");
       sendResponse({ success: true });
@@ -216,10 +391,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       log("Error applying changes:", error.message);
       sendResponse({ success: false, error: error.message });
     }
+  } else if (message.action === "toggleChanges") {
+    // Toggle between original and modified versions
+    toggleChanges();
+    sendResponse({ 
+      success: true, 
+      changesApplied: changesApplied 
+    });
+  } else if (message.action === "removeToggleButton") {
+    // Remove the toggle button from the page
+    const toggleButton = document.getElementById('ai-experimenter-toggle');
+    if (toggleButton) {
+      toggleButton.remove();
+      log("Toggle button removed");
+    }
+    sendResponse({ success: true });
   } else if (message.action === "ping") {
     // Respond to ping to confirm content script is loaded
     log("Responding to ping");
     sendResponse({ status: "content_script_ready" });
+  } else if (message.action === 'getSuggestions') {
+    chrome.storage.local.get(['suggestions'], (result) => {
+      sendResponse({ suggestions: result.suggestions || [] });
+    });
+    return true; // Keep the message channel open for async response
   }
   
   log("Message handled:", message.action);

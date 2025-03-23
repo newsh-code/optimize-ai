@@ -85,26 +85,38 @@ function displayError(message) {
   document.body.setAttribute('data-popup-state', 'error');
 }
 
-// Display success message in the UI
-function displaySuccessMessage(message) {
-  // Create or update success message
-  const container = document.getElementById('success-message-container');
-  if (!container) {
-    log("Success message container not found");
-    return;
+// Display a success message
+function displaySuccessMessage(message, additionalInfo) {
+  // Remove any existing success message
+  const existingSuccessMsg = document.getElementById('success-message');
+  if (existingSuccessMsg) {
+    existingSuccessMsg.remove();
   }
   
-  let successEl = document.getElementById('success-message');
-  if (!successEl) {
-    successEl = document.createElement('div');
-    successEl.id = 'success-message';
-    successEl.className = 'success-message';
-    container.appendChild(successEl);
+  // Create the success message container
+  const successMsgContainer = document.createElement('div');
+  successMsgContainer.id = 'success-message';
+  successMsgContainer.className = 'success-message';
+  successMsgContainer.textContent = message;
+  
+  // If additional info is provided, add it below the success message
+  if (additionalInfo) {
+    const additionalInfoEl = document.createElement('div');
+    additionalInfoEl.className = 'additional-info';
+    additionalInfoEl.innerHTML = additionalInfo;
+    successMsgContainer.appendChild(additionalInfoEl);
   }
   
-  successEl.textContent = message;
+  // Insert the success message before the results section
+  if (resultsSection && resultsSection.parentNode) {
+    resultsSection.parentNode.insertBefore(successMsgContainer, resultsSection);
+  } else {
+    log("Error: Could not find results section to append success message");
+    // Fallback to appending to the body
+    document.body.appendChild(successMsgContainer);
+  }
   
-  // Update popup state attribute to indicate changes were applied
+  // Mark the body with changes-applied state
   document.body.setAttribute('data-popup-state', 'changes-applied');
 }
 
@@ -460,23 +472,21 @@ function displayAnnotations(annotations) {
   });
 }
 
-// Apply changes to the DOM
-applyBtn.addEventListener('click', async (event) => {
-  // Log popup state before applying changes
-  log("Before applying changes - popup is open");
+// Apply Changes - This sends the changes to the content script
+applyBtn.addEventListener('click', async (e) => {
+  // Log the current popup state
+  log("Apply button clicked, current popup state:", document.body.getAttribute('data-popup-state'));
   
-  // Prevent default button behavior which might cause issues
-  event.preventDefault();
+  // Prevent default button behavior to avoid issues
+  e.preventDefault();
   
-  if (!currentSuggestions.length) {
-    alert('No suggestions to apply');
-    return;
-  }
-  
-  // Capture all DOM elements we'll need to reference
-  // This ensures we have references even if Chrome destroys and recreates the popup
-  const popupElements = {
+  // Capture important DOM elements to keep references even if popup is recreated
+  const domElements = {
+    initial: initialView,
+    analysis: analysisView,
     hypothesisInput: hypothesisInput,
+    loadingEl: loadingEl,
+    loadingMsg: loadingMsg,
     resultsSection: resultsSection,
     analysisHeader: analysisHeader,
     annotationsContainer: annotationsContainer,
@@ -526,9 +536,11 @@ applyBtn.addEventListener('click', async (event) => {
           timestamp: Date.now(),
           hasChangesApplied: true,
           pageAnalyzed: true
-        }
+        },
+        // Also store suggestions separately for the toggle functionality
+        suggestions: storedSuggestions
       });
-      log("Saved popup state to storage");
+      log("Saved popup state and suggestions to storage");
     } catch (storageError) {
       log("Error saving popup state:", storageError);
     }
@@ -585,53 +597,48 @@ applyBtn.addEventListener('click', async (event) => {
     // Set changesApplied flag to true
     changesApplied = true;
     
-    // Force focus on the popup again
-    window.focus();
-    applyBtn.focus();
+    // Hide loading
+    hideLoading();
     
-    // Check if popup is still open by examining DOM
-    const isPopupStillOpen = document.body && document.getElementById('action-buttons');
-    log("Popup still open check:", isPopupStillOpen ? "YES" : "NO");
-    
-    if (isPopupStillOpen) {
-      // Display success message
-      displaySuccessMessage('Changes applied successfully! Click "Review Changes" to see the before & after comparison.');
+    // Check if popup is still open after apply
+    if (document.body) {
+      // Update UI state to show changes are applied
+      document.body.setAttribute('data-popup-state', 'changes-applied');
       
-      // Update UI to show review button
+      // Enable the review button
+      if (reviewBtn) {
+        reviewBtn.disabled = false;
+      }
+      
+      // Disable the apply button to prevent double-application
+      if (applyBtn) {
+        applyBtn.disabled = true;
+      }
+      
+      // Add success message with info about the toggle button
+      displaySuccessMessage(
+        "Changes applied successfully!",
+        "A toggle button has been added to the page. <strong>Click it</strong> to switch between the original and modified versions."
+      );
+      
+      // Show the review container
       if (reviewContainer) {
         reviewContainer.classList.remove('hidden');
       }
-      reviewBtn.disabled = false;
-      
-      // Mark that changes were applied in the DOM
-      document.body.setAttribute('data-popup-state', 'changes-applied');
-      
-      // Save state to storage again with updated flags
-      await savePopupState();
     }
     
-    // Log final state
-    log("After applying changes - popup should still be open");
+    log("Changes applied successfully");
   } catch (error) {
     log("Error applying changes:", error);
     
-    // Show error message
-    displayError(`Error applying changes: ${error.message}`);
-    
-    // Reset changesApplied flag
-    changesApplied = false;
-    
-    // Hide review button
-    if (reviewContainer) {
-      reviewContainer.classList.add('hidden');
-    }
-    reviewBtn.disabled = true;
-    
-    // Update popup state
-    document.body.setAttribute('data-popup-state', 'error');
-  } finally {
     // Hide loading
     hideLoading();
+    
+    // Show error state
+    document.body.setAttribute('data-popup-state', 'error');
+    
+    // Display error message
+    displayError(error.message);
   }
 });
 

@@ -74,6 +74,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ error: error.message });
       });
     return true; // Required for async sendResponse
+  } else if (message.action === "getSuggestions") {
+    log("Received request to get stored suggestions");
+    chrome.storage.local.get(['suggestions'], (result) => {
+      log("Retrieved suggestions from storage:", result.suggestions ? `${result.suggestions.length} items` : "none");
+      sendResponse({ suggestions: result.suggestions || [] });
+    });
+    return true; // Required for async sendResponse
   }
 });
 
