@@ -3,28 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OptimizeAI</title>
+  <title>AI Webpage Experimenter</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body data-popup-state="initial">
   <div class="container">
-    <h1>OptimizeAI</h1>
+    <header>
+      <h1>AI Webpage Experimenter</h1>
+    </header>
     
     <div class="section">
-      <h2>Hypothesis</h2>
-      <p class="description">How could this page be improved?</p>
-      <textarea id="hypothesis-input" placeholder="e.g., Making the CTA button more prominent will increase conversions"></textarea>
+      <h2>Input Hypothesis</h2>
+      <p class="description">Enter a hypothesis about how the webpage could be improved.</p>
+      <textarea id="hypothesis-input" class="hypothesis-input" placeholder="e.g., Making the CTA button more prominent would increase conversions"></textarea>
+      
       <div class="button-row">
+        <button id="submit-btn" class="primary-btn">Generate Ideas</button>
         <button id="analyze-btn" class="primary-btn">Analyze Page</button>
-        <button id="submit-btn" class="secondary-btn">Generate Ideas</button>
-      </div>
-      <div id="loading" class="hidden">
-        <div class="spinner"></div>
-        <p id="loading-message">Processing hypothesis...</p>
       </div>
     </div>
     
-    <div id="results-section" class="section hidden">
+    <div id="loading" class="loading-container hidden">
+      <div class="spinner"></div>
+      <p id="loading-message">Processing hypothesis...</p>
+    </div>
+    
+    <div id="results-section" class="section hidden" data-section="results">
       <div id="analysis-header" class="section hidden">
         <h3 id="analysis-title">Webpage Analysis</h3>
         <p id="analysis-description" class="description"></p>
@@ -36,15 +40,16 @@
       
       <div id="annotations-container" class="hidden">
         <h3>Identified Issues</h3>
-        <div id="annotations-list"></div>
+        <div id="annotations-list" class="annotations-list"></div>
       </div>
       
-      <div id="suggestions-section">
-        <h3>Suggested Changes</h3>
-        <div id="suggestions-container"></div>
+      <div id="suggestions-container" class="suggestions-container">
+        <!-- Suggestions will be added here -->
       </div>
       
-      <div class="button-row">
+      <div id="success-message-container"></div>
+      
+      <div class="button-row" id="action-buttons">
         <button id="apply-btn" class="primary-btn">Apply Changes</button>
         <div id="review-container" class="hidden">
           <button id="review-btn" class="secondary-btn">Review Changes</button>

@@ -30,7 +30,7 @@ function log(...args) {
 }
 
 // Initialize the popup
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Focus the hypothesis input
   hypothesisInput.focus();
   
@@ -62,6 +62,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (reviewBtn) {
     reviewBtn.disabled = true;
   }
+  
+  // Check for saved state (if popup was closed after applying changes)
+  await checkAndRestorePopupState();
+  
+  // Log that popup is initialized
+  log("Popup initialized. DOM state:", document.body.innerHTML.length, "bytes");
 });
 
 // Display error message in the UI
@@ -79,23 +85,24 @@ function displayError(message) {
 // Display success message in the UI
 function displaySuccessMessage(message) {
   // Create or update success message
+  const container = document.getElementById('success-message-container');
+  if (!container) {
+    log("Success message container not found");
+    return;
+  }
+  
   let successEl = document.getElementById('success-message');
   if (!successEl) {
     successEl = document.createElement('div');
     successEl.id = 'success-message';
     successEl.className = 'success-message';
-    
-    // Insert before the button row
-    const buttonRow = applyBtn.closest('.button-row');
-    if (buttonRow && buttonRow.parentNode) {
-      buttonRow.parentNode.insertBefore(successEl, buttonRow);
-    } else {
-      // Fallback
-      suggestionsContainer.after(successEl);
-    }
+    container.appendChild(successEl);
   }
   
   successEl.textContent = message;
+  
+  // Update popup state attribute to indicate changes were applied
+  document.body.setAttribute('data-popup-state', 'changes-applied');
 }
 
 // Show loading state
@@ -430,13 +437,37 @@ function displayAnnotations(annotations) {
 }
 
 // Apply changes to the DOM
-applyBtn.addEventListener('click', async () => {
+applyBtn.addEventListener('click', async (event) => {
+  // Log popup state before applying changes
+  log("Before applying changes - popup is open");
+  
+  // Prevent default button behavior which might cause issues
+  event.preventDefault();
+  
   if (!currentSuggestions.length) {
     alert('No suggestions to apply');
     return;
   }
   
+  // Capture all DOM elements we'll need to reference
+  // This ensures we have references even if Chrome destroys and recreates the popup
+  const popupElements = {
+    hypothesisInput: hypothesisInput,
+    resultsSection: resultsSection,
+    analysisHeader: analysisHeader,
+    annotationsContainer: annotationsContainer,
+    annotationsList: annotationsList,
+    suggestionsContainer: suggestionsContainer,
+    reviewContainer: reviewContainer,
+    reviewBtn: reviewBtn,
+    applyBtn: applyBtn,
+    resetBtn: resetBtn
+  };
+  
   try {
+    // Mark the body to show processing state
+    document.body.setAttribute('data-popup-state', 'processing');
+    
     // Get the active tab
     const tab = await getCurrentTab();
     
@@ -449,12 +480,39 @@ applyBtn.addEventListener('click', async () => {
       existingSuccessMsg.remove();
     }
     
+    // Create a deep copy of state to persist
+    const storedHypothesis = hypothesisInput.value.trim();
+    const storedResults = JSON.parse(JSON.stringify(currentResults || {}));
+    const storedSuggestions = JSON.parse(JSON.stringify(currentSuggestions || []));
+    
+    // Save state to storage in case popup reloads
+    try {
+      await chrome.storage.local.set({
+        popupState: {
+          hypothesis: storedHypothesis,
+          results: storedResults,
+          suggestions: storedSuggestions,
+          timestamp: Date.now(),
+          hasChangesApplied: true
+        }
+      });
+      log("Saved popup state to storage");
+    } catch (storageError) {
+      log("Error saving popup state:", storageError);
+    }
+    
     // Send changes to content script
     await new Promise((resolve, reject) => {
       chrome.tabs.sendMessage(
         tab.id,
-        { action: 'applyChanges', changes: currentSuggestions },
+        { 
+          action: 'applyChanges', 
+          changes: currentSuggestions,
+          preventPopupClose: true // Signal to keep popup open
+        },
         (response) => {
+          log("Received response from content script", response);
+          
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
             return;
@@ -471,8 +529,14 @@ applyBtn.addEventListener('click', async () => {
       );
     });
     
-    // Add a small delay to ensure changes are rendered
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Log that we've passed the content script communication
+    log("After content script communication - popup still open");
+    
+    // Add a small delay to ensure changes are rendered on the page
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Try to keep focus on the popup during the process
+    window.focus();
     
     // Capture the "after" screenshot
     afterScreenshot = await captureScreenshot(tab.id);
@@ -489,14 +553,30 @@ applyBtn.addEventListener('click', async () => {
     // Set changesApplied flag to true
     changesApplied = true;
     
-    // Display success message
-    displaySuccessMessage('Changes applied successfully! Click "Review Changes" to see the before & after comparison.');
+    // Force focus on the popup again
+    window.focus();
+    applyBtn.focus();
     
-    // Update UI to show review button
-    if (reviewContainer) {
-      reviewContainer.classList.remove('hidden');
+    // Check if popup is still open by examining DOM
+    const isPopupStillOpen = document.body && document.getElementById('action-buttons');
+    log("Popup still open check:", isPopupStillOpen ? "YES" : "NO");
+    
+    if (isPopupStillOpen) {
+      // Display success message
+      displaySuccessMessage('Changes applied successfully! Click "Review Changes" to see the before & after comparison.');
+      
+      // Update UI to show review button
+      if (reviewContainer) {
+        reviewContainer.classList.remove('hidden');
+      }
+      reviewBtn.disabled = false;
+      
+      // Mark that changes were applied in the DOM
+      document.body.setAttribute('data-popup-state', 'changes-applied');
     }
-    reviewBtn.disabled = false;
+    
+    // Log final state
+    log("After applying changes - popup should still be open");
   } catch (error) {
     log("Error applying changes:", error);
     
@@ -511,6 +591,9 @@ applyBtn.addEventListener('click', async () => {
       reviewContainer.classList.add('hidden');
     }
     reviewBtn.disabled = true;
+    
+    // Update popup state
+    document.body.setAttribute('data-popup-state', 'error');
   } finally {
     // Hide loading
     hideLoading();
@@ -676,5 +759,88 @@ function getSuggestionDescription(suggestion) {
       return `Change color to ${value}`;
     default:
       return JSON.stringify(value);
+  }
+}
+
+// Add function to check and restore popup state if needed
+async function checkAndRestorePopupState() {
+  try {
+    const data = await chrome.storage.local.get('popupState');
+    if (data.popupState) {
+      const state = data.popupState;
+      const stateAge = Date.now() - (state.timestamp || 0);
+      
+      // Only restore state if it's fresh (less than 30 seconds old)
+      if (stateAge < 30000 && state.suggestions && state.suggestions.length > 0) {
+        log("Restoring popup state from storage, age:", Math.round(stateAge/1000), "seconds");
+        
+        // Restore hypothesis
+        if (state.hypothesis) {
+          hypothesisInput.value = state.hypothesis;
+        }
+        
+        // Restore results and suggestions
+        if (state.results) {
+          currentResults = state.results;
+          
+          // If there was analysis data, restore the analysis display
+          if (state.results.title) {
+            analysisTitle.textContent = state.results.title;
+            analysisDescription.textContent = state.results.description || "";
+            analysisHeader.classList.remove('hidden');
+            
+            // Restore annotations if available
+            if (state.results.annotations && state.results.annotations.length > 0) {
+              displayAnnotations(state.results.annotations);
+              annotationsContainer.classList.remove('hidden');
+            }
+          }
+        }
+        
+        if (state.suggestions) {
+          currentSuggestions = state.suggestions;
+          
+          // Display the suggestions
+          displaySuggestions(currentSuggestions);
+          
+          // Show results section
+          resultsSection.classList.remove('hidden');
+          
+          // If changes were applied, show success and review button
+          if (state.hasChangesApplied) {
+            // Display success message
+            displaySuccessMessage('Changes were applied! Click "Review Changes" to see the before & after comparison.');
+            
+            // Set changesApplied flag to true
+            changesApplied = true;
+            
+            // Update UI to show review button
+            if (reviewContainer) {
+              reviewContainer.classList.remove('hidden');
+            }
+            reviewBtn.disabled = false;
+            
+            // Set popup state
+            document.body.setAttribute('data-popup-state', 'changes-applied');
+          }
+        }
+        
+        // Keep the state in storage for a short while in case of another refresh
+        // but update the timestamp to track age
+        const updatedState = {
+          ...state,
+          timestamp: Date.now() 
+        };
+        
+        chrome.storage.local.set({ popupState: updatedState });
+        
+        // Schedule removal after 30 seconds
+        setTimeout(() => {
+          chrome.storage.local.remove('popupState');
+        }, 30000);
+      }
+    }
+  } catch (error) {
+    log("Error restoring popup state:", error);
   }
 } 
