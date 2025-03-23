@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OptimizeAI</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>OptimizeAI</h1>
+    
+    <div class="section">
+      <h2>Hypothesis</h2>
+      <p class="description">How could this page be improved?</p>
+      <textarea id="hypothesis-input" placeholder="e.g., Making the CTA button more prominent will increase conversions"></textarea>
+      <div class="button-row">
+        <button id="analyze-btn" class="primary-btn">Analyze Page</button>
+        <button id="submit-btn" class="secondary-btn">Generate Ideas</button>
+      </div>
+      <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <p id="loading-message">Processing hypothesis...</p>
+      </div>
+    </div>
+    
+    <div id="results-section" class="section hidden">
+      <div id="analysis-header" class="section hidden">
+        <h3 id="analysis-title">Webpage Analysis</h3>
+        <p id="analysis-description" class="description"></p>
+      </div>
+      
+      <div id="screenshot-container" class="screenshot-container hidden">
+        <!-- Screenshot content will be added dynamically -->
+      </div>
+      
+      <div id="annotations-container" class="hidden">
+        <h3>Identified Issues</h3>
+        <div id="annotations-list"></div>
+      </div>
+      
+      <div id="suggestions-section">
+        <h3>Suggested Changes</h3>
+        <div id="suggestions-container"></div>
+      </div>
+      
+      <div class="button-row">
+        <button id="apply-btn" class="primary-btn">Apply Changes</button>
+        <div id="review-container" class="hidden">
+          <button id="review-btn" class="secondary-btn">Review Changes</button>
+        </div>
+        <button id="reset-btn" class="secondary-btn">Reset</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 
