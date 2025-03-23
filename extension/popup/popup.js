@@ -1,5 +1,8 @@
 // DOM elements
+const initialView = document.getElementById('initial-view');
+const analysisView = document.getElementById('analysis-view');
 const hypothesisInput = document.getElementById('hypothesis-input');
+const hypothesisSection = document.getElementById('hypothesis-section');
 const submitBtn = document.getElementById('submit-btn');
 const analyzeBtn = document.getElementById('analyze-btn');
 const loadingEl = document.getElementById('loading');
@@ -17,12 +20,13 @@ const resetBtn = document.getElementById('reset-btn');
 const reviewBtn = document.getElementById('review-btn');
 const reviewContainer = document.getElementById('review-container');
 
-// Store the current suggestions
+// Store the current state
 let currentSuggestions = [];
 let currentScreenshot = null;
 let currentResults = null;
 let afterScreenshot = null;
 let changesApplied = false;
+let pageAnalyzed = false;
 
 // Helper for logging
 function log(...args) {
@@ -31,9 +35,6 @@ function log(...args) {
 
 // Initialize the popup
 document.addEventListener('DOMContentLoaded', async () => {
-  // Focus the hypothesis input
-  hypothesisInput.focus();
-  
   // Ensure loading indicator is hidden initially
   loadingEl.classList.add('hidden');
   
@@ -63,23 +64,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     reviewBtn.disabled = true;
   }
   
-  // Check for saved state (if popup was closed after applying changes)
+  // Check for saved state
   await checkAndRestorePopupState();
   
   // Log that popup is initialized
-  log("Popup initialized. DOM state:", document.body.innerHTML.length, "bytes");
+  log("Popup initialized with new workflow. DOM state:", document.body.innerHTML.length, "bytes");
 });
 
 // Display error message in the UI
 function displayError(message) {
-  // Show results section with error
-  resultsSection.classList.remove('hidden');
+  // Show error in the current view
   suggestionsContainer.innerHTML = `
     <div class="error-message">
       <p>${message}</p>
       <p class="error-help">Please try again or check the console for more details.</p>
     </div>
   `;
+  
+  // Update popup state
+  document.body.setAttribute('data-popup-state', 'error');
 }
 
 // Display success message in the UI
@@ -107,21 +110,24 @@ function displaySuccessMessage(message) {
 
 // Show loading state
 function showLoading(message) {
-  loadingMsg.textContent = message || "Processing hypothesis...";
+  loadingMsg.textContent = message || "Processing...";
   loadingEl.classList.remove('hidden');
-  submitBtn.disabled = true;
-  analyzeBtn.disabled = true;
-  applyBtn.disabled = true;
-  reviewBtn.disabled = true;
-  resultsSection.classList.add('hidden');
+  
+  // Disable all action buttons
+  if (analyzeBtn) analyzeBtn.disabled = true;
+  if (submitBtn) submitBtn.disabled = true;
+  if (applyBtn) applyBtn.disabled = true;
+  if (reviewBtn) reviewBtn.disabled = true;
 }
 
 // Hide loading state
 function hideLoading() {
   loadingEl.classList.add('hidden');
-  submitBtn.disabled = false;
-  analyzeBtn.disabled = false;
-  applyBtn.disabled = !currentSuggestions.length;
+  
+  // Enable appropriate buttons based on state
+  if (analyzeBtn) analyzeBtn.disabled = false;
+  if (submitBtn && pageAnalyzed) submitBtn.disabled = false;
+  if (applyBtn) applyBtn.disabled = !currentSuggestions.length;
   
   // Only enable review button if changes have been applied
   if (changesApplied && reviewContainer) {
@@ -225,101 +231,20 @@ function displayScreenshot(screenshotUrl) {
   }
 }
 
-// Submit hypothesis for basic suggestion generation (no page analysis)
-submitBtn.addEventListener('click', async () => {
-  const hypothesis = hypothesisInput.value.trim();
-  
-  if (!hypothesis) {
-    alert('Please enter a hypothesis');
-    return;
-  }
-  
-  // Reset UI and state
-  resetResults();
-  changesApplied = false;
-  
-  // Show loading state
-  showLoading("Generating ideas for your hypothesis...");
-  
-  try {
-    log("Submitting hypothesis:", hypothesis);
-    
-    // Send message to background script to interpret hypothesis
-    const response = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { action: 'interpretHypothesis', hypothesis },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          
-          log("Received response from background script:", response);
-          resolve(response);
-        }
-      );
-    });
-    
-    if (response && response.error) {
-      log("Error from background script:", response.error);
-      throw new Error(response.error);
-    }
-    
-    // Check if the response has the expected format
-    if (!response || !response.suggested_changes || !Array.isArray(response.suggested_changes)) {
-      log("Invalid response format:", response);
-      throw new Error("The server response did not contain valid suggestions. Please check the API endpoint.");
-    }
-    
-    // Store current suggestions
-    currentSuggestions = response.suggested_changes;
-    
-    // Set current results with basic structure
-    currentResults = {
-      type: 'hypothesis',
-      hypothesis: hypothesis,
-      suggestedChanges: currentSuggestions,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Display the suggestions
-    displaySuggestions(currentSuggestions);
-    
-    // Show results section
-    resultsSection.classList.remove('hidden');
-    
-    // Enable apply button if we have suggestions
-    applyBtn.disabled = !currentSuggestions.length;
-  } catch (error) {
-    log("Error processing hypothesis:", error);
-    displayError(error.message);
-  } finally {
-    // Always hide loading indicator and enable buttons when done
-    hideLoading();
-  }
-});
-
-// Analyze webpage with hypothesis
+// Analyze Page - This is now the first step in the workflow
 analyzeBtn.addEventListener('click', async () => {
-  const hypothesis = hypothesisInput.value.trim();
-  
-  if (!hypothesis) {
-    alert('Please enter a hypothesis');
-    return;
-  }
-  
-  // Reset UI and state
-  resetResults();
-  changesApplied = false;
-  
   try {
+    // Update UI state
+    initialView.classList.add('hidden');
+    document.body.setAttribute('data-popup-state', 'analyzing');
+    
     // Get the current tab
     const tab = await getCurrentTab();
     
     // Show loading state
     showLoading("Capturing screenshot and analyzing webpage...");
     
-    log("Analyzing webpage with hypothesis:", hypothesis);
+    log("Analyzing webpage");
     
     // Send message to background script to analyze webpage
     const response = await new Promise((resolve, reject) => {
@@ -327,7 +252,7 @@ analyzeBtn.addEventListener('click', async () => {
         { 
           action: 'analyzeWebpage', 
           tabId: tab.id,
-          hypothesis: hypothesis
+          initialAnalysis: true // Flag to indicate this is the initial analysis without hypothesis
         },
         (response) => {
           if (chrome.runtime.lastError) {
@@ -346,14 +271,12 @@ analyzeBtn.addEventListener('click', async () => {
       throw new Error(response.error);
     }
     
-    // Store the complete analysis results
+    // Store the analysis results
     currentResults = {
       type: 'analysis',
-      hypothesis: hypothesis,
-      title: response.title || "Webpage Analysis",
+      title: response.title || "Page Analysis",
       description: response.description || "",
       annotations: response.annotations || [],
-      suggestedChanges: response.suggested_changes || [],
       beforeScreenshot: response.screenshotUrl,
       afterScreenshot: null,
       url: tab.url,
@@ -363,23 +286,115 @@ analyzeBtn.addEventListener('click', async () => {
     // Display the analysis results
     displayAnalysisResults(response);
     
-    // Enable apply button if we have suggestions
-    applyBtn.disabled = !currentSuggestions.length;
+    // Show the hypothesis input section
+    analysisView.classList.remove('hidden');
+    
+    // Focus on the hypothesis input
+    hypothesisInput.focus();
+    
+    // Set the pageAnalyzed flag
+    pageAnalyzed = true;
+    
+    // Update popup state
+    document.body.setAttribute('data-popup-state', 'analyzed');
+    
+    // Save state to storage
+    await savePopupState();
+    
   } catch (error) {
     log("Error analyzing webpage:", error);
     displayError(error.message);
+    
+    // Show initial view again if there was an error
+    initialView.classList.remove('hidden');
   } finally {
-    // Always hide loading indicator and enable buttons when done
+    // Always hide loading indicator when done
     hideLoading();
   }
 });
 
-// Display full analysis results including annotations and suggestions
+// Create Variation - This is the second step in the workflow
+submitBtn.addEventListener('click', async () => {
+  const hypothesis = hypothesisInput.value.trim();
+  
+  if (!hypothesis) {
+    alert('Please enter a hypothesis');
+    return;
+  }
+  
+  // Update UI
+  resultsSection.classList.add('hidden');
+  document.body.setAttribute('data-popup-state', 'processing');
+  changesApplied = false;
+  
+  // Show loading state
+  showLoading("Creating variation based on your hypothesis...");
+  
+  try {
+    log("Processing hypothesis:", hypothesis);
+    
+    // Get the current tab
+    const tab = await getCurrentTab();
+    
+    // Send message to background script to create variation
+    const response = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { 
+          action: 'createVariation', 
+          tabId: tab.id,
+          hypothesis: hypothesis,
+          baseAnalysis: currentResults
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          
+          log("Received variation response:", response);
+          resolve(response);
+        }
+      );
+    });
+    
+    if (response && response.error) {
+      log("Error creating variation:", response.error);
+      throw new Error(response.error);
+    }
+    
+    // Update the current results with variation data
+    if (currentResults) {
+      currentResults.hypothesis = hypothesis;
+      currentResults.suggestedChanges = response.suggested_changes || [];
+      currentResults.annotations = response.annotations || [];
+    }
+    
+    // Store current suggestions
+    currentSuggestions = response.suggested_changes || [];
+    
+    // Display the variation results
+    displayVariationResults(response);
+    
+    // Enable apply button if we have suggestions
+    applyBtn.disabled = !currentSuggestions.length;
+    
+    // Save state to storage
+    await savePopupState();
+    
+  } catch (error) {
+    log("Error creating variation:", error);
+    displayError(error.message);
+  } finally {
+    // Always hide loading indicator when done
+    hideLoading();
+  }
+});
+
+// Display full analysis results including annotations
 function displayAnalysisResults(results) {
   // Show header with title and description
-  analysisTitle.textContent = results.title || "Webpage Analysis";
+  analysisTitle.textContent = results.title || "Page Analysis";
   analysisDescription.textContent = results.description || "";
-  analysisHeader.classList.remove('hidden');
   
   // Display screenshot if available
   if (results.screenshotUrl) {
@@ -395,11 +410,19 @@ function displayAnalysisResults(results) {
     displayAnnotations(results.annotations);
     annotationsContainer.classList.remove('hidden');
   }
+}
+
+// Display variation results with suggestions
+function displayVariationResults(results) {
+  // Display annotations if available
+  if (results.annotations && results.annotations.length > 0) {
+    displayAnnotations(results.annotations);
+    annotationsContainer.classList.remove('hidden');
+  }
   
   // Display suggestions
   if (results.suggested_changes && results.suggested_changes.length > 0) {
-    currentSuggestions = results.suggested_changes;
-    displaySuggestions(currentSuggestions);
+    displaySuggestions(results.suggested_changes);
   } else {
     suggestionsContainer.innerHTML = '<p>No specific changes suggested.</p>';
   }
@@ -493,7 +516,8 @@ applyBtn.addEventListener('click', async (event) => {
           results: storedResults,
           suggestions: storedSuggestions,
           timestamp: Date.now(),
-          hasChangesApplied: true
+          hasChangesApplied: true,
+          pageAnalyzed: true
         }
       });
       log("Saved popup state to storage");
@@ -573,6 +597,9 @@ applyBtn.addEventListener('click', async (event) => {
       
       // Mark that changes were applied in the DOM
       document.body.setAttribute('data-popup-state', 'changes-applied');
+      
+      // Save state to storage again with updated flags
+      await savePopupState();
     }
     
     // Log final state
@@ -602,9 +629,21 @@ applyBtn.addEventListener('click', async (event) => {
 
 // Reset the form and results
 resetBtn.addEventListener('click', () => {
-  hypothesisInput.value = '';
+  // Clear the hypothesis input if present
+  if (hypothesisInput) {
+    hypothesisInput.value = '';
+  }
+  
+  // Reset all results
   resetResults();
-  hypothesisInput.focus();
+  
+  // Reset to initial view
+  initialView.classList.remove('hidden');
+  analysisView.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+  
+  // Clear state flags
+  pageAnalyzed = false;
   changesApplied = false;
   
   // Hide the review container
@@ -617,6 +656,12 @@ resetBtn.addEventListener('click', () => {
   if (successMsg) {
     successMsg.remove();
   }
+  
+  // Reset popup state
+  document.body.setAttribute('data-popup-state', 'initial');
+  
+  // Clear stored state
+  chrome.storage.local.remove('popupState');
 });
 
 // Open the Review Changes tab
@@ -660,11 +705,30 @@ async function saveReviewData(data) {
   }
 }
 
+// Save current popup state to chrome.storage.local
+async function savePopupState() {
+  try {
+    await chrome.storage.local.set({
+      popupState: {
+        hypothesis: hypothesisInput ? hypothesisInput.value.trim() : "",
+        results: currentResults,
+        suggestions: currentSuggestions,
+        timestamp: Date.now(),
+        hasChangesApplied: changesApplied,
+        pageAnalyzed: pageAnalyzed
+      }
+    });
+    log("Saved popup state to storage");
+  } catch (error) {
+    log("Error saving popup state:", error);
+  }
+}
+
 // Reset all results sections
 function resetResults() {
   // Hide all results containers
   resultsSection.classList.add('hidden');
-  analysisHeader.classList.add('hidden');
+  analysisView.classList.add('hidden');
   annotationsContainer.classList.add('hidden');
   if (screenshotContainer) {
     screenshotContainer.classList.add('hidden');
@@ -683,6 +747,7 @@ function resetResults() {
   currentResults = null;
   afterScreenshot = null;
   changesApplied = false;
+  pageAnalyzed = false;
   
   // Disable the buttons
   applyBtn.disabled = true;
@@ -692,6 +757,9 @@ function resetResults() {
   if (reviewContainer) {
     reviewContainer.classList.add('hidden');
   }
+  
+  // Show initial view
+  initialView.classList.remove('hidden');
 }
 
 // Display suggestions in the UI
@@ -762,7 +830,7 @@ function getSuggestionDescription(suggestion) {
   }
 }
 
-// Add function to check and restore popup state if needed
+// Check and restore popup state if needed
 async function checkAndRestorePopupState() {
   try {
     const data = await chrome.storage.local.get('popupState');
@@ -771,57 +839,67 @@ async function checkAndRestorePopupState() {
       const stateAge = Date.now() - (state.timestamp || 0);
       
       // Only restore state if it's fresh (less than 30 seconds old)
-      if (stateAge < 30000 && state.suggestions && state.suggestions.length > 0) {
+      if (stateAge < 30000) {
         log("Restoring popup state from storage, age:", Math.round(stateAge/1000), "seconds");
         
-        // Restore hypothesis
-        if (state.hypothesis) {
-          hypothesisInput.value = state.hypothesis;
-        }
-        
-        // Restore results and suggestions
-        if (state.results) {
-          currentResults = state.results;
+        // If page was analyzed, show analysis view
+        if (state.pageAnalyzed) {
+          initialView.classList.add('hidden');
+          analysisView.classList.remove('hidden');
+          pageAnalyzed = true;
           
-          // If there was analysis data, restore the analysis display
-          if (state.results.title) {
-            analysisTitle.textContent = state.results.title;
-            analysisDescription.textContent = state.results.description || "";
-            analysisHeader.classList.remove('hidden');
+          // Restore hypothesis input
+          if (state.hypothesis && hypothesisInput) {
+            hypothesisInput.value = state.hypothesis;
+          }
+          
+          // Restore results
+          if (state.results) {
+            currentResults = state.results;
             
-            // Restore annotations if available
-            if (state.results.annotations && state.results.annotations.length > 0) {
-              displayAnnotations(state.results.annotations);
-              annotationsContainer.classList.remove('hidden');
+            // Display analysis results
+            if (state.results.title) {
+              analysisTitle.textContent = state.results.title;
+              analysisDescription.textContent = state.results.description || "";
+              
+              // Display screenshot if available
+              if (state.results.beforeScreenshot) {
+                displayScreenshot(state.results.beforeScreenshot);
+              }
+              
+              // Display annotations if available
+              if (state.results.annotations && state.results.annotations.length > 0) {
+                displayAnnotations(state.results.annotations);
+                annotationsContainer.classList.remove('hidden');
+              }
+            }
+            
+            // If suggestions exist, show them
+            if (state.suggestions && state.suggestions.length > 0) {
+              currentSuggestions = state.suggestions;
+              displaySuggestions(currentSuggestions);
+              resultsSection.classList.remove('hidden');
             }
           }
-        }
-        
-        if (state.suggestions) {
-          currentSuggestions = state.suggestions;
           
-          // Display the suggestions
-          displaySuggestions(currentSuggestions);
-          
-          // Show results section
-          resultsSection.classList.remove('hidden');
-          
-          // If changes were applied, show success and review button
+          // If changes were applied, update UI accordingly
           if (state.hasChangesApplied) {
-            // Display success message
-            displaySuccessMessage('Changes were applied! Click "Review Changes" to see the before & after comparison.');
-            
-            // Set changesApplied flag to true
             changesApplied = true;
             
-            // Update UI to show review button
+            // Show success message
+            displaySuccessMessage('Changes were applied! Click "Review Changes" to see the before & after comparison.');
+            
+            // Show review button
             if (reviewContainer) {
               reviewContainer.classList.remove('hidden');
             }
             reviewBtn.disabled = false;
             
-            // Set popup state
+            // Update popup state
             document.body.setAttribute('data-popup-state', 'changes-applied');
+          } else {
+            // Update popup state
+            document.body.setAttribute('data-popup-state', 'analyzed');
           }
         }
         

@@ -41,6 +41,13 @@ h3 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.nested-section {
+  background-color: #f8f9fa;
+  box-shadow: none;
+  border: 1px solid #e9ecef;
+  margin-top: 16px;
+}
+
 .description {
   font-size: 14px;
   color: #6c757d;
@@ -63,6 +70,10 @@ textarea {
   justify-content: flex-end;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.button-row.centered {
+  justify-content: center;
 }
 
 button {
@@ -307,6 +318,14 @@ body[data-popup-state="initial"] {
   /* Default state */
 }
 
+body[data-popup-state="analyzing"] {
+  cursor: progress;
+}
+
+body[data-popup-state="analyzed"] {
+  /* After analysis is complete */
+}
+
 body[data-popup-state="processing"] {
   cursor: progress;
 }
@@ -344,4 +363,36 @@ body[data-popup-state="error"] .error-message {
   font-family: inherit;
   font-size: 14px;
   margin-bottom: 15px;
+}
+
+/* Workflow stage indicators */
+.workflow-indicator {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.workflow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 25%;
+}
+
+.step-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #e9ecef;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.step-circle.active {
+  background-color: #0d6efd;
+  color: white;
 } 

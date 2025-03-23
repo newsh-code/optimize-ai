@@ -12,25 +12,24 @@
       <h1>AI Webpage Experimenter</h1>
     </header>
     
-    <div class="section">
-      <h2>Input Hypothesis</h2>
-      <p class="description">Enter a hypothesis about how the webpage could be improved.</p>
-      <textarea id="hypothesis-input" class="hypothesis-input" placeholder="e.g., Making the CTA button more prominent would increase conversions"></textarea>
-      
-      <div class="button-row">
-        <button id="submit-btn" class="primary-btn">Generate Ideas</button>
+    <!-- Initial View: Only Analyze Page Button -->
+    <div id="initial-view" class="section">
+      <p class="description">Click below to analyze the current page and suggest improvements.</p>
+      <div class="button-row centered">
         <button id="analyze-btn" class="primary-btn">Analyze Page</button>
       </div>
     </div>
     
+    <!-- Loading State -->
     <div id="loading" class="loading-container hidden">
       <div class="spinner"></div>
-      <p id="loading-message">Processing hypothesis...</p>
+      <p id="loading-message">Analyzing page...</p>
     </div>
     
-    <div id="results-section" class="section hidden" data-section="results">
-      <div id="analysis-header" class="section hidden">
-        <h3 id="analysis-title">Webpage Analysis</h3>
+    <!-- Analysis Results View -->
+    <div id="analysis-view" class="section hidden">
+      <div id="analysis-header">
+        <h3 id="analysis-title">Page Analysis</h3>
         <p id="analysis-description" class="description"></p>
       </div>
       
@@ -38,6 +37,18 @@
         <!-- Screenshot content will be added dynamically -->
       </div>
       
+      <div id="hypothesis-section" class="section nested-section">
+        <h3>Create a Variation</h3>
+        <p class="description">Enter a hypothesis about how this page could be improved.</p>
+        <textarea id="hypothesis-input" class="hypothesis-input" placeholder="e.g., Making the CTA button more prominent would increase conversions"></textarea>
+        <div class="button-row">
+          <button id="submit-btn" class="primary-btn">Create Variation</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Variation Results View -->
+    <div id="results-section" class="section hidden" data-section="results">
       <div id="annotations-container" class="hidden">
         <h3>Identified Issues</h3>
         <div id="annotations-list" class="annotations-list"></div>
