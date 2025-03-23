@@ -503,9 +503,16 @@ applyBtn.addEventListener('click', async (event) => {
       existingSuccessMsg.remove();
     }
     
-    // Create a deep copy of state to persist
+    // Create a lightweight copy for storage (without screenshots)
     const storedHypothesis = hypothesisInput.value.trim();
-    const storedResults = JSON.parse(JSON.stringify(currentResults || {}));
+    let storedResults = null;
+    
+    if (currentResults) {
+      storedResults = JSON.parse(JSON.stringify(currentResults));
+      delete storedResults.beforeScreenshot;
+      delete storedResults.afterScreenshot;
+    }
+    
     const storedSuggestions = JSON.parse(JSON.stringify(currentSuggestions || []));
     
     // Save state to storage in case popup reloads
@@ -674,9 +681,20 @@ reviewBtn.addEventListener('click', async () => {
   try {
     log("Opening review tab");
     
-    // Create a new tab with review.html
-    chrome.tabs.create({ 
-      url: chrome.runtime.getURL("review/review.html")
+    // Make sure we have the review ID
+    const reviewId = currentResults.id || Date.now().toString();
+    
+    // Ensure we have URLs for the review page to reference
+    await chrome.storage.local.get('reviewId', async (data) => {
+      if (!data.reviewId) {
+        // If no review ID is stored yet, we need to save the data
+        await saveReviewData(currentResults);
+      }
+      
+      // Create a new tab with review.html
+      chrome.tabs.create({ 
+        url: chrome.runtime.getURL(`review/review.html?id=${reviewId}`)
+      });
     });
     
   } catch (error) {
@@ -692,10 +710,33 @@ async function saveReviewData(data) {
     const reviewId = Date.now().toString();
     data.id = reviewId;
     
+    // Store screenshots separately to avoid exceeding quota
+    const beforeScreenshot = data.beforeScreenshot;
+    const afterScreenshot = data.afterScreenshot;
+    
+    // Remove screenshots from the main data object
+    const reviewData = { ...data };
+    delete reviewData.beforeScreenshot;
+    delete reviewData.afterScreenshot;
+    
+    // Store the review data without screenshots
     await chrome.storage.local.set({ 
-      currentReview: data,
+      currentReview: reviewData,
       reviewId: reviewId
     });
+    
+    // Store screenshots separately with smaller keys
+    if (beforeScreenshot) {
+      await chrome.storage.local.set({
+        [`screenshot_before_${reviewId}`]: beforeScreenshot
+      });
+    }
+    
+    if (afterScreenshot) {
+      await chrome.storage.local.set({
+        [`screenshot_after_${reviewId}`]: afterScreenshot
+      });
+    }
     
     log("Review data saved to storage with ID:", reviewId);
     return reviewId;
@@ -708,16 +749,29 @@ async function saveReviewData(data) {
 // Save current popup state to chrome.storage.local
 async function savePopupState() {
   try {
+    // Create a lightweight copy of the results without screenshots
+    let lightResults = null;
+    
+    if (currentResults) {
+      lightResults = JSON.parse(JSON.stringify(currentResults));
+      // Remove screenshot data to reduce storage size
+      delete lightResults.beforeScreenshot;
+      delete lightResults.afterScreenshot;
+    }
+    
+    const stateToSave = {
+      hypothesis: hypothesisInput ? hypothesisInput.value.trim() : "",
+      results: lightResults,
+      suggestions: currentSuggestions,
+      timestamp: Date.now(),
+      hasChangesApplied: changesApplied,
+      pageAnalyzed: pageAnalyzed
+    };
+    
     await chrome.storage.local.set({
-      popupState: {
-        hypothesis: hypothesisInput ? hypothesisInput.value.trim() : "",
-        results: currentResults,
-        suggestions: currentSuggestions,
-        timestamp: Date.now(),
-        hasChangesApplied: changesApplied,
-        pageAnalyzed: pageAnalyzed
-      }
+      popupState: stateToSave
     });
+    
     log("Saved popup state to storage");
   } catch (error) {
     log("Error saving popup state:", error);
@@ -862,9 +916,18 @@ async function checkAndRestorePopupState() {
               analysisTitle.textContent = state.results.title;
               analysisDescription.textContent = state.results.description || "";
               
-              // Display screenshot if available
-              if (state.results.beforeScreenshot) {
-                displayScreenshot(state.results.beforeScreenshot);
+              // Try to reload the screenshot if we have a review ID
+              if (state.results.id) {
+                try {
+                  const screenshotData = await chrome.storage.local.get(`screenshot_before_${state.results.id}`);
+                  if (screenshotData && screenshotData[`screenshot_before_${state.results.id}`]) {
+                    currentResults.beforeScreenshot = screenshotData[`screenshot_before_${state.results.id}`];
+                    displayScreenshot(currentResults.beforeScreenshot);
+                  }
+                } catch (err) {
+                  log("Error loading screenshot:", err);
+                  // Continue without the screenshot
+                }
               }
               
               // Display annotations if available
