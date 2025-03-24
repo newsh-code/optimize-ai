@@ -200,109 +200,156 @@ function applyChangesToDOM(suggestions) {
     debugDiv.appendChild(changesList);
     
     for (const suggestion of suggestions) {
-      if (!suggestion.elementInfo || !suggestion.elementInfo.xpath) {
-        log('Missing elementInfo or xpath in suggestion', suggestion);
+      // Handle both new format (elementInfo.xpath) and old format (element CSS selector)
+      let targetElements = [];
+      
+      if (suggestion.elementInfo && suggestion.elementInfo.xpath) {
+        // New format: Use XPath
+        const element = getElementByXPath(suggestion.elementInfo.xpath);
+        if (element) {
+          targetElements = [element];
+        } else {
+          log(`Element not found for xpath: ${suggestion.elementInfo.xpath}`);
+          
+          // Add to debug overlay
+          const errorItem = document.createElement('li');
+          errorItem.style.color = '#ff6b6b';
+          errorItem.textContent = `Element not found: ${suggestion.elementInfo.xpath.substring(0, 30)}...`;
+          changesList.appendChild(errorItem);
+        }
+      } else if (suggestion.element) {
+        // Old format: Use CSS selector
+        log(`Using CSS selector: ${suggestion.element}`);
+        try {
+          const elements = document.querySelectorAll(suggestion.element);
+          if (elements.length > 0) {
+            targetElements = Array.from(elements);
+          } else {
+            log(`No elements found for selector: ${suggestion.element}`);
+            
+            // Add to debug overlay
+            const errorItem = document.createElement('li');
+            errorItem.style.color = '#ff6b6b';
+            errorItem.textContent = `Elements not found: ${suggestion.element}`;
+            changesList.appendChild(errorItem);
+          }
+        } catch (selectorError) {
+          log(`Invalid selector: ${suggestion.element}`, selectorError);
+          
+          // Add to debug overlay
+          const errorItem = document.createElement('li');
+          errorItem.style.color = '#ff6b6b';
+          errorItem.textContent = `Invalid selector: ${suggestion.element}`;
+          changesList.appendChild(errorItem);
+        }
+      } else {
+        log('Missing element selector or xpath in suggestion', suggestion);
         continue;
       }
       
-      const element = getElementByXPath(suggestion.elementInfo.xpath);
-      if (!element) {
-        log(`Element not found for xpath: ${suggestion.elementInfo.xpath}`);
+      // Now process each target element
+      for (const element of targetElements) {
+        // Create a highlight effect
+        const origOutline = element.style.outline;
+        element.style.outline = '2px solid #4285f4';
+        element.style.transition = 'outline 0.5s ease-in-out';
         
-        // Add to debug overlay
-        const errorItem = document.createElement('li');
-        errorItem.style.color = '#ff6b6b';
-        errorItem.textContent = `Element not found: ${suggestion.elementInfo.xpath.substring(0, 30)}...`;
-        changesList.appendChild(errorItem);
+        // Store the original state
+        const actionType = suggestion.action || 'unknown';
+        saveOriginalState(element, actionType);
         
-        continue;
-      }
-      
-      // Create a highlight effect around the element to make it clear it's being modified
-      const origOutline = element.style.outline;
-      element.style.outline = '2px solid #4285f4';
-      element.style.transition = 'outline 0.5s ease-in-out';
-      
-      // Store the original state
-      saveOriginalState(element, suggestion.action);
-      
-      // Track if this specific element was changed
-      let elementChanged = false;
-      
-      if (suggestion.action === 'change_text' && suggestion.newText) {
-        log(`Changing text for element ${suggestion.elementInfo.xpath}`);
-        log(`  From: "${element.textContent}"`);
-        log(`  To: "${suggestion.newText}"`);
-        element.textContent = suggestion.newText;
-        changesMade++;
-        elementChanged = true;
-      } else if (suggestion.action === 'change_style' && suggestion.styleChanges) {
-        log(`Changing style for element ${suggestion.elementInfo.xpath}`);
-        log(`  Style changes:`, suggestion.styleChanges);
-        Object.keys(suggestion.styleChanges).forEach(property => {
-          log(`    ${property}: ${element.style[property]} -> ${suggestion.styleChanges[property]}`);
-          element.style[property] = suggestion.styleChanges[property];
-        });
-        changesMade++;
-        elementChanged = true;
-      } else if (suggestion.action === 'change_attribute' && suggestion.attributeChanges) {
-        log(`Changing attributes for element ${suggestion.elementInfo.xpath}`);
-        log(`  Attribute changes:`, suggestion.attributeChanges);
-        Object.keys(suggestion.attributeChanges).forEach(attribute => {
-          log(`    ${attribute}: ${element.getAttribute(attribute)} -> ${suggestion.attributeChanges[attribute]}`);
-          element.setAttribute(attribute, suggestion.attributeChanges[attribute]);
-        });
-        changesMade++;
-        elementChanged = true;
-      } else if (suggestion.action === 'change_size' && suggestion.sizeChanges) {
-        log(`Changing size for element ${suggestion.elementInfo.xpath}`);
-        log(`  Size changes:`, suggestion.sizeChanges);
-        if (suggestion.sizeChanges.width) {
-          log(`    width: ${element.style.width} -> ${suggestion.sizeChanges.width}`);
-          element.style.width = suggestion.sizeChanges.width;
-        }
-        if (suggestion.sizeChanges.height) {
-          log(`    height: ${element.style.height} -> ${suggestion.sizeChanges.height}`);
-          element.style.height = suggestion.sizeChanges.height;
-        }
-        changesMade++;
-        elementChanged = true;
-      } else if (suggestion.action === 'change_color' && suggestion.colorChanges) {
-        log(`Changing color for element ${suggestion.elementInfo.xpath}`);
-        log(`  Color changes:`, suggestion.colorChanges);
-        if (suggestion.colorChanges.textColor) {
-          log(`    color: ${element.style.color} -> ${suggestion.colorChanges.textColor}`);
-          element.style.color = suggestion.colorChanges.textColor;
-        }
-        if (suggestion.colorChanges.backgroundColor) {
-          log(`    backgroundColor: ${element.style.backgroundColor} -> ${suggestion.colorChanges.backgroundColor}`);
-          element.style.backgroundColor = suggestion.colorChanges.backgroundColor;
-        }
-        changesMade++;
-        elementChanged = true;
-      }
-      
-      // Add the element to the debug list if it was changed
-      if (elementChanged) {
-        const changeItem = document.createElement('li');
-        changeItem.textContent = `${suggestion.action} on ${element.tagName.toLowerCase()}`;
-        if (element.id) {
-          changeItem.textContent += `#${element.id}`;
-        } else if (element.className) {
-          changeItem.textContent += `.${element.className.split(' ')[0]}`;
-        }
-        changesList.appendChild(changeItem);
+        // Track if this specific element was changed
+        let elementChanged = false;
         
-        // Scroll the element into view if it's not already visible
-        if (!isElementInViewport(element)) {
-          element.scrollIntoView({behavior: 'smooth', block: 'center'});
+        if (suggestion.action === 'change_text' && (suggestion.newText || suggestion.value)) {
+          const newText = suggestion.newText || suggestion.value;
+          log(`Changing text for element ${element.tagName}`);
+          log(`  From: "${element.textContent}"`);
+          log(`  To: "${newText}"`);
+          element.textContent = newText;
+          changesMade++;
+          elementChanged = true;
+        } else if (suggestion.action === 'change_style' && (suggestion.styleChanges || suggestion.value)) {
+          const styleChanges = suggestion.styleChanges || suggestion.value;
+          log(`Changing style for element ${element.tagName}`);
+          log(`  Style changes:`, styleChanges);
+          Object.keys(styleChanges).forEach(property => {
+            log(`    ${property}: ${element.style[property]} -> ${styleChanges[property]}`);
+            element.style[property] = styleChanges[property];
+          });
+          changesMade++;
+          elementChanged = true;
+        } else if (suggestion.action === 'change_attribute' && (suggestion.attributeChanges || suggestion.value)) {
+          const attributeChanges = suggestion.attributeChanges || 
+                                 (suggestion.value && typeof suggestion.value === 'object' ? 
+                                  { [suggestion.value.name]: suggestion.value.value } : {});
+          
+          log(`Changing attributes for element ${element.tagName}`);
+          log(`  Attribute changes:`, attributeChanges);
+          Object.keys(attributeChanges).forEach(attribute => {
+            log(`    ${attribute}: ${element.getAttribute(attribute)} -> ${attributeChanges[attribute]}`);
+            element.setAttribute(attribute, attributeChanges[attribute]);
+          });
+          changesMade++;
+          elementChanged = true;
+        } else if ((suggestion.action === 'change_size' || suggestion.action === 'increase_size') && 
+                  (suggestion.sizeChanges || suggestion.value)) {
+          const sizeChanges = suggestion.sizeChanges || 
+                           (typeof suggestion.value === 'object' ? suggestion.value : 
+                            { transform: 'scale(1.2)', 'transform-origin': 'center' });
+          
+          log(`Changing size for element ${element.tagName}`);
+          log(`  Size changes:`, sizeChanges);
+          Object.keys(sizeChanges).forEach(property => {
+            log(`    ${property}: ${element.style[property]} -> ${sizeChanges[property]}`);
+            element.style[property] = sizeChanges[property];
+          });
+          changesMade++;
+          elementChanged = true;
+        } else if (suggestion.action === 'change_color' && (suggestion.colorChanges || suggestion.value)) {
+          if (suggestion.colorChanges) {
+            log(`Changing color for element ${element.tagName}`);
+            log(`  Color changes:`, suggestion.colorChanges);
+            if (suggestion.colorChanges.textColor) {
+              log(`    color: ${element.style.color} -> ${suggestion.colorChanges.textColor}`);
+              element.style.color = suggestion.colorChanges.textColor;
+            }
+            if (suggestion.colorChanges.backgroundColor) {
+              log(`    backgroundColor: ${element.style.backgroundColor} -> ${suggestion.colorChanges.backgroundColor}`);
+              element.style.backgroundColor = suggestion.colorChanges.backgroundColor;
+            }
+          } else if (suggestion.value) {
+            // Simple string value is assumed to be text color
+            log(`Changing color for element ${element.tagName}`);
+            log(`    color: ${element.style.color} -> ${suggestion.value}`);
+            element.style.color = suggestion.value;
+          }
+          changesMade++;
+          elementChanged = true;
         }
+        
+        // Add the element to the debug list if it was changed
+        if (elementChanged) {
+          const changeItem = document.createElement('li');
+          changeItem.textContent = `${suggestion.action} on ${element.tagName.toLowerCase()}`;
+          if (element.id) {
+            changeItem.textContent += `#${element.id}`;
+          } else if (element.className) {
+            changeItem.textContent += `.${element.className.split(' ')[0]}`;
+          }
+          changesList.appendChild(changeItem);
+          
+          // Scroll the element into view if it's not already visible
+          if (!isElementInViewport(element)) {
+            element.scrollIntoView({behavior: 'smooth', block: 'center'});
+          }
+        }
+        
+        // After a delay, remove the highlight outline
+        setTimeout(() => {
+          element.style.outline = origOutline;
+        }, 2000);
       }
-      
-      // After a delay, remove the highlight outline
-      setTimeout(() => {
-        element.style.outline = origOutline;
-      }, 2000);
     }
     
     // Create toggle button after changes are applied
