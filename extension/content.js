@@ -542,8 +542,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     log("Sending visible DOM info, elements:", visibleDOM.length);
     sendResponse({ visibleDOM });
   } else if (message.action === "applyChanges") {
-    // Apply suggested changes to the DOM
-    const changes = message.changes;
+    // Handle both property formats: changes (old) and suggestions (new)
+    const changes = message.changes || message.suggestions;
+    
+    // Check if we actually have changes to apply
+    if (!changes || !Array.isArray(changes)) {
+      log("Error: No changes/suggestions array provided in message", message);
+      sendResponse({ success: false, error: "No valid changes array provided" });
+      return true;
+    }
+    
     log("Applying changes to DOM, count:", changes.length);
     
     try {
@@ -554,6 +562,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       
       applyChangesToDOM(changes);
+      
+      // Store the last applied changes
+      lastAppliedChanges = [...changes];
+      changesApplied = true;
+      
+      // Create the toggle button if it doesn't exist yet
+      createToggleButton();
+      
       log("Changes applied successfully");
       sendResponse({ success: true });
     } catch (error) {
