@@ -764,42 +764,14 @@ function generateHTMLReport(data) {
   const annotations = data.annotations || [];
   const suggestedChanges = data.suggestedChanges || [];
   
-  // Create HTML structure with modern DaisyUI-like styling
+  // Create HTML structure with simple styling
   return `<!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} - OptimizeAI Report</title>
   <style>
-    /* Base styles that mimic DaisyUI */
-    :root {
-      --primary: #570df8;
-      --primary-focus: #4406cb;
-      --primary-content: #ffffff;
-      --secondary: #f000b8;
-      --secondary-focus: #bd0091;
-      --secondary-content: #ffffff;
-      --accent: #37cdbe;
-      --accent-focus: #2aa79b;
-      --accent-content: #ffffff;
-      --neutral: #3d4451;
-      --neutral-focus: #2a2e37;
-      --neutral-content: #ffffff;
-      --base-100: #ffffff;
-      --base-200: #f2f2f2;
-      --base-300: #e5e6e6;
-      --base-content: #1f2937;
-      --success: #36d399;
-      --success-content: #ffffff;
-      --warning: #fbbd23;
-      --warning-content: #ffffff;
-      --error: #f87272;
-      --error-content: #ffffff;
-      --info: #3abff8;
-      --info-content: #ffffff;
-    }
-    
     * {
       box-sizing: border-box;
       margin: 0;
@@ -809,8 +781,8 @@ function generateHTMLReport(data) {
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       line-height: 1.6;
-      color: var(--base-content);
-      background-color: var(--base-200);
+      color: #212529;
+      background-color: #f8f9fa;
       padding: 0;
       margin: 0;
     }
@@ -825,8 +797,8 @@ function generateHTMLReport(data) {
     header {
       text-align: center;
       padding: 2rem 1rem;
-      background-color: var(--primary);
-      color: var(--primary-content);
+      background-color: #0d6efd;
+      color: #ffffff;
       margin-bottom: 2rem;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
@@ -850,7 +822,7 @@ function generateHTMLReport(data) {
     
     /* Card styling */
     .card {
-      background-color: var(--base-100);
+      background-color: #ffffff;
       border-radius: 0.5rem;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
@@ -860,7 +832,7 @@ function generateHTMLReport(data) {
     .card h2 {
       margin-top: 0;
       margin-bottom: 1.25rem;
-      color: var(--primary);
+      color: #0d6efd;
       font-size: 1.5rem;
     }
     
@@ -868,7 +840,7 @@ function generateHTMLReport(data) {
       margin-top: 1.5rem;
       margin-bottom: 1rem;
       font-size: 1.25rem;
-      color: var(--neutral);
+      color: #495057;
     }
     
     /* Meta info and badges */
@@ -880,20 +852,20 @@ function generateHTMLReport(data) {
     }
     
     .badge {
-      background-color: var(--base-200);
+      background-color: #e9ecef;
       padding: 0.625rem 1rem;
       border-radius: 0.375rem;
       font-size: 0.875rem;
     }
     
     .badge-primary {
-      background-color: var(--primary);
-      color: var(--primary-content);
+      background-color: #0d6efd;
+      color: #ffffff;
     }
     
     .badge-accent {
-      background-color: var(--accent);
-      color: var(--accent-content);
+      background-color: #20c997;
+      color: #ffffff;
     }
     
     /* Hypothesis box */
@@ -904,8 +876,8 @@ function generateHTMLReport(data) {
     }
     
     .alert-warning {
-      background-color: rgba(251, 189, 35, 0.1);
-      border-left: 4px solid var(--warning);
+      background-color: rgba(255, 193, 7, 0.1);
+      border-left: 4px solid #ffc107;
     }
     
     /* Comparison styling */
@@ -917,10 +889,10 @@ function generateHTMLReport(data) {
     }
     
     .image-wrapper {
-      border: 1px solid var(--base-300);
+      border: 1px solid #dee2e6;
       border-radius: 0.375rem;
       overflow: hidden;
-      background-color: var(--base-100);
+      background-color: #ffffff;
     }
     
     .image-wrapper img {
@@ -932,8 +904,8 @@ function generateHTMLReport(data) {
     .image-placeholder {
       padding: 2rem;
       text-align: center;
-      background-color: var(--base-200);
-      color: var(--base-content);
+      background-color: #f8f9fa;
+      color: #6c757d;
       font-style: italic;
     }
     
@@ -942,32 +914,32 @@ function generateHTMLReport(data) {
       padding: 1rem;
       margin-bottom: 1rem;
       border-radius: 0.375rem;
-      border: 1px solid var(--base-300);
-      background-color: var(--base-100);
+      border: 1px solid #dee2e6;
+      background-color: #ffffff;
     }
     
     .annotation-item {
-      border-left: 4px solid var(--primary);
+      border-left: 4px solid #0d6efd;
     }
     
     .change-item {
-      border-left: 4px solid var(--secondary);
+      border-left: 4px solid #20c997;
     }
     
     .item-title {
       font-weight: bold;
       margin-bottom: 0.5rem;
-      color: var(--primary);
+      color: #0d6efd;
     }
     
     .item-label {
       font-weight: bold;
-      color: var(--neutral);
+      color: #495057;
     }
     
     .code-block {
       font-family: monospace;
-      background-color: var(--base-200);
+      background-color: #f8f9fa;
       padding: 1rem;
       border-radius: 0.375rem;
       margin: 1rem 0;
@@ -980,10 +952,10 @@ function generateHTMLReport(data) {
       text-align: center;
       margin-top: 2.5rem;
       padding: 1.25rem;
-      color: var(--base-content);
+      color: #6c757d;
       opacity: 0.7;
       font-size: 0.875rem;
-      border-top: 1px solid var(--base-300);
+      border-top: 1px solid #dee2e6;
     }
     
     /* Responsive adjustments */
