@@ -1,72 +1,71 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Webpage Experimenter</title>
-  <link rel="stylesheet" href="tailwind.css">
   <link rel="stylesheet" href="popup.css">
 </head>
-<body data-popup-state="initial" class="bg-base-100">
-  <div class="container mx-auto p-4">
-    <header class="mb-4">
-      <h1 class="text-2xl font-bold text-primary">AI Webpage Experimenter</h1>
+<body data-popup-state="initial">
+  <div class="container">
+    <header>
+      <h1>AI Webpage Experimenter</h1>
     </header>
     
     <!-- Initial View: Only Analyze Page Button -->
-    <div id="initial-view" class="section card bg-base-200 p-4 shadow-md">
-      <p class="description mb-4">Click below to analyze the current page and suggest improvements.</p>
-      <div class="button-row centered flex justify-center">
-        <button id="analyze-btn" class="primary-btn btn btn-primary">Analyze Page</button>
+    <div id="initial-view" class="section">
+      <p class="description">Click below to analyze the current page and suggest improvements.</p>
+      <div class="button-row centered">
+        <button id="analyze-btn" class="primary-btn">Analyze Page</button>
       </div>
     </div>
     
     <!-- Loading State -->
-    <div id="loading" class="loading-container hidden flex flex-col items-center justify-center p-4">
-      <div class="spinner loading loading-spinner text-primary"></div>
-      <p id="loading-message" class="mt-2">Analyzing page...</p>
+    <div id="loading" class="loading-container hidden">
+      <div class="spinner"></div>
+      <p id="loading-message">Analyzing page...</p>
     </div>
     
     <!-- Analysis Results View -->
-    <div id="analysis-view" class="section hidden card bg-base-200 p-4 shadow-md mb-4">
-      <div id="analysis-header" class="mb-4">
-        <h3 id="analysis-title" class="text-xl font-semibold text-primary">Page Analysis</h3>
-        <p id="analysis-description" class="description text-sm opacity-75"></p>
+    <div id="analysis-view" class="section hidden">
+      <div id="analysis-header">
+        <h3 id="analysis-title">Page Analysis</h3>
+        <p id="analysis-description" class="description"></p>
       </div>
       
-      <div id="screenshot-container" class="screenshot-container hidden card bg-base-100 p-2 mb-4">
+      <div id="screenshot-container" class="screenshot-container hidden">
         <!-- Screenshot content will be added dynamically -->
       </div>
       
-      <div id="annotations-container" class="hidden card bg-base-100 p-4 mb-4">
-        <h3 class="text-lg font-semibold mb-2">Identified Issues</h3>
+      <div id="annotations-container" class="hidden">
+        <h3>Identified Issues</h3>
         <div id="annotations-list" class="annotations-list"></div>
       </div>
       
-      <div id="hypothesis-section" class="section nested-section card bg-base-100 p-4">
-        <h3 class="text-lg font-semibold mb-2">Create a Variation</h3>
-        <p class="description mb-2">Enter a hypothesis about how this page could be improved.</p>
-        <textarea id="hypothesis-input" class="hypothesis-input textarea textarea-bordered w-full mb-4" placeholder="e.g., Making the CTA button more prominent would increase conversions"></textarea>
-        <div class="button-row flex justify-end">
-          <button id="submit-btn" class="primary-btn btn btn-primary">Create Variation</button>
+      <div id="hypothesis-section" class="section nested-section">
+        <h3>Create a Variation</h3>
+        <p class="description">Enter a hypothesis about how this page could be improved.</p>
+        <textarea id="hypothesis-input" class="hypothesis-input" placeholder="e.g., Making the CTA button more prominent would increase conversions"></textarea>
+        <div class="button-row">
+          <button id="submit-btn" class="primary-btn">Create Variation</button>
         </div>
       </div>
     </div>
     
     <!-- Variation Results View -->
-    <div id="results-section" class="section hidden card bg-base-200 p-4 shadow-md" data-section="results">
-      <div id="suggestions-container" class="suggestions-container mb-4">
+    <div id="results-section" class="section hidden" data-section="results">
+      <div id="suggestions-container" class="suggestions-container">
         <!-- Suggestions will be added here -->
       </div>
       
-      <div id="success-message-container" class="alert alert-success mb-4 hidden"></div>
+      <div id="success-message-container" class="success-message hidden"></div>
       
-      <div class="button-row flex space-x-2" id="action-buttons">
-        <button id="apply-btn" class="primary-btn btn btn-primary">Apply Changes</button>
+      <div class="button-row" id="action-buttons">
+        <button id="apply-btn" class="primary-btn">Apply Changes</button>
         <div id="review-container" class="hidden">
-          <button id="review-btn" class="secondary-btn btn btn-secondary">Review Changes</button>
+          <button id="review-btn" class="secondary-btn">Review Changes</button>
         </div>
-        <button id="reset-btn" class="secondary-btn btn btn-outline">Reset</button>
+        <button id="reset-btn" class="secondary-btn">Reset</button>
       </div>
     </div>
   </div>
