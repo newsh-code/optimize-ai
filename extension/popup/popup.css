@@ -414,4 +414,64 @@ body[data-popup-state="error"] .error-message {
 .step-circle.active {
   background-color: #0d6efd;
   color: white;
+}
+
+/* Loading state transitions */
+.loading-container {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  visibility: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-container:not(.hidden) {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Specific state for loading on button actions */
+body[data-loading="true"] .loading-container {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Different loading message styles based on action type */
+body[data-popup-state="analyzing"] #loading-message {
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+body[data-popup-state="processing"] #loading-message {
+  color: #3498db;
+  font-weight: 500;
+}
+
+body[data-popup-state="applying"] #loading-message {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+/* Ensure smooth transitions between states */
+#initial-view, #analysis-view, #results-section {
+  transition: opacity 0.25s ease;
+}
+
+#initial-view.hidden, #analysis-view.hidden, #results-section.hidden {
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+#initial-view:not(.hidden), #analysis-view:not(.hidden), #results-section:not(.hidden) {
+  opacity: 1;
 } 

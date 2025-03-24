@@ -35,7 +35,7 @@ function log(...args) {
 
 // Initialize the popup
 document.addEventListener('DOMContentLoaded', async () => {
-  // Ensure loading indicator is hidden initially
+  // Ensure initial loading indicator is always hidden
   loadingEl.classList.add('hidden');
   
   // Create screenshot container if it doesn't exist
@@ -72,8 +72,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Non-critical error, continue with initialization
   }
   
-  // Check for saved state
-  await checkAndRestorePopupState();
+  // Check for saved state - but only if not in initial state
+  try {
+    const data = await chrome.storage.local.get('popupState');
+    if (data.popupState) {
+      await checkAndRestorePopupState();
+    } else {
+      // Ensure we're in initial state with analyze button clearly visible
+      document.body.setAttribute('data-popup-state', 'initial');
+      initialView.classList.remove('hidden');
+      analysisView.classList.add('hidden');
+      resultsSection.classList.add('hidden');
+    }
+  } catch (error) {
+    log("Error checking saved state:", error);
+    // Ensure default view is shown on error
+    document.body.setAttribute('data-popup-state', 'initial');
+    initialView.classList.remove('hidden');
+  }
   
   // Log that popup is initialized
   log("Popup initialized with new workflow. DOM state:", document.body.innerHTML.length, "bytes");
@@ -128,37 +144,53 @@ function displaySuccessMessage(message, additionalInfo) {
   document.body.setAttribute('data-popup-state', 'changes-applied');
 }
 
-// Show loading state
+// Show loading state with appropriate message for specific action
 function showLoading(message) {
+  // Set the loading message
   loadingMsg.textContent = message || "Processing...";
+  
+  // Show the loading container
   loadingEl.classList.remove('hidden');
   
-  // Disable all action buttons
+  // Add a loading attribute to the body for potential CSS targeting
+  document.body.setAttribute('data-loading', 'true');
+  
+  // Disable all action buttons during loading
   if (analyzeBtn) analyzeBtn.disabled = true;
   if (submitBtn) submitBtn.disabled = true;
   if (applyBtn) applyBtn.disabled = true;
   if (reviewBtn) reviewBtn.disabled = true;
+  if (resetBtn) resetBtn.disabled = true;
+  
+  log(`Loading state shown: "${message}"`);
 }
 
-// Hide loading state
+// Hide loading state and restore appropriate button states
 function hideLoading() {
+  // Hide the loading container
   loadingEl.classList.add('hidden');
   
-  // Enable appropriate buttons based on state
+  // Remove the loading attribute from body
+  document.body.removeAttribute('data-loading');
+  
+  // Enable appropriate buttons based on current state
   if (analyzeBtn) analyzeBtn.disabled = false;
   if (submitBtn && pageAnalyzed) submitBtn.disabled = false;
   if (applyBtn) applyBtn.disabled = !currentSuggestions.length;
+  if (resetBtn) resetBtn.disabled = false;
   
   // Only enable review button if changes have been applied
   if (changesApplied && reviewContainer) {
     reviewContainer.classList.remove('hidden');
-    reviewBtn.disabled = false;
+    if (reviewBtn) reviewBtn.disabled = false;
   } else {
     if (reviewContainer) {
       reviewContainer.classList.add('hidden');
     }
-    reviewBtn.disabled = true;
+    if (reviewBtn) reviewBtn.disabled = true;
   }
+  
+  log("Loading state hidden, buttons restored based on current state");
 }
 
 // Get the current active tab
@@ -531,210 +563,106 @@ function displayAnnotations(annotations) {
   });
 }
 
-// Apply Changes - This sends the changes to the content script
-applyBtn.addEventListener('click', async (e) => {
-  // Log the current popup state
-  log("Apply button clicked, current popup state:", document.body.getAttribute('data-popup-state'));
-  
-  // Prevent default button behavior to avoid issues
-  e.preventDefault();
-  
-  // Check if we have suggestions to apply
+// Apply Changes to the webpage
+applyBtn.addEventListener('click', async () => {
   if (!currentSuggestions || !currentSuggestions.length) {
-    displayError("No suggestions to apply");
+    alert('No suggestions to apply');
     return;
   }
   
-  log(`Preparing to apply ${currentSuggestions.length} suggestions to the DOM`);
+  // Update UI state
+  document.body.setAttribute('data-popup-state', 'applying');
   
-  // Capture important DOM elements to keep references even if popup is recreated
-  const domElements = {
-    initial: initialView,
-    analysis: analysisView,
-    hypothesisInput: hypothesisInput,
-    loadingEl: loadingEl,
-    loadingMsg: loadingMsg,
-    resultsSection: resultsSection,
-    analysisHeader: analysisHeader,
-    annotationsContainer: annotationsContainer,
-    annotationsList: annotationsList,
-    suggestionsContainer: suggestionsContainer,
-    reviewContainer: reviewContainer,
-    reviewBtn: reviewBtn,
-    applyBtn: applyBtn,
-    resetBtn: resetBtn
-  };
+  // Disable button during processing
+  applyBtn.disabled = true;
+  
+  // Show loading indicator with appropriate message
+  showLoading("Applying changes to webpage...");
   
   try {
-    // Mark the body to show processing state
-    document.body.setAttribute('data-popup-state', 'processing');
+    log("Applying changes to webpage");
     
-    // Get the active tab
+    // Get the current tab
     const tab = await getCurrentTab();
-    log(`Active tab: ${tab.id} - ${tab.url}`);
     
-    // Show loading 
-    showLoading("Applying changes to webpage...");
-    
-    // Remove any existing success message
+    // Remove any existing success message first
     const existingSuccessMsg = document.getElementById('success-message');
     if (existingSuccessMsg) {
       existingSuccessMsg.remove();
     }
     
-    // Create a lightweight copy for storage (without screenshots)
-    const storedHypothesis = hypothesisInput.value.trim();
-    let storedResults = null;
-    
-    if (currentResults) {
-      storedResults = JSON.parse(JSON.stringify(currentResults));
-      delete storedResults.beforeScreenshot;
-      delete storedResults.afterScreenshot;
-    }
-    
-    const storedSuggestions = JSON.parse(JSON.stringify(currentSuggestions || []));
-    
-    // Verify suggestions format is as expected
-    storedSuggestions.forEach((suggestion, index) => {
-      log(`Suggestion ${index+1}:`, suggestion);
-      
-      // Ensure each suggestion has the necessary properties
-      if (!suggestion.elementInfo) {
-        log("Warning: Suggestion missing elementInfo:", suggestion);
-      } else if (!suggestion.elementInfo.xpath) {
-        log("Warning: Suggestion missing xpath:", suggestion.elementInfo);
-      }
-      
-      if (!suggestion.action) {
-        log("Warning: Suggestion missing action:", suggestion);
-      }
-    });
-    
-    // Save state to storage in case popup reloads
-    try {
-      await chrome.storage.local.set({
-        popupState: {
-          hypothesis: storedHypothesis,
-          results: storedResults,
-          suggestions: storedSuggestions,
-          timestamp: Date.now(),
-          hasChangesApplied: true,
-          pageAnalyzed: true
-        },
-        // Also store suggestions separately for the toggle functionality
-        suggestions: storedSuggestions
-      });
-      log("Saved popup state and suggestions to storage");
-    } catch (storageError) {
-      log("Error saving popup state:", storageError);
-    }
-    
-    // Send changes to content script
-    log("Sending applyChanges message to content script with", storedSuggestions.length, "suggestions");
-    await new Promise((resolve, reject) => {
+    // Send message to content script to apply changes
+    const response = await new Promise((resolve, reject) => {
       chrome.tabs.sendMessage(
         tab.id,
-        { 
-          action: 'applyChanges', 
-          changes: storedSuggestions,
-          preventPopupClose: true // Signal to keep popup open
+        {
+          action: 'applyChanges',
+          suggestions: currentSuggestions,
+          dontClosePopup: true // Signal to prevent popup from closing
         },
         (response) => {
-          log("Received response from content script:", response);
-          
           if (chrome.runtime.lastError) {
-            log("Chrome runtime error:", chrome.runtime.lastError);
             reject(new Error(chrome.runtime.lastError.message));
             return;
           }
           
-          if (!response) {
-            log("Warning: No response received from content script");
-            reject(new Error("No response received from content script"));
-            return;
-          }
-          
-          if (response && response.success) {
-            log("Content script applied changes successfully:", response);
-            resolve(response);
-          } else if (response && response.error) {
-            log("Content script reported error:", response.error);
-            reject(new Error(response.error));
-          } else {
-            log("Unknown response from content script:", response);
-            reject(new Error("Unknown error applying changes"));
-          }
+          log("Received apply changes response:", response);
+          resolve(response);
         }
       );
     });
     
-    // Log that we've passed the content script communication
-    log("After content script communication - popup still open");
+    // Wait a moment for DOM updates to be visible
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Add a small delay to ensure changes are rendered on the page
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Try to keep focus on the popup during the process
-    window.focus();
-    
-    // Capture the "after" screenshot
-    log("Capturing after-changes screenshot");
+    // Capture an after screenshot
     afterScreenshot = await captureScreenshot(tab.id);
-    log("Captured after-changes screenshot successfully");
     
-    // Update the current results with the after screenshot
+    // Compress the screenshot for storage
+    const compressedScreenshot = await compressImage(afterScreenshot);
+    
+    // Store the complete results for the review page
     if (currentResults) {
-      currentResults.afterScreenshot = afterScreenshot;
+      currentResults.afterScreenshot = compressedScreenshot;
+      currentResults.suggestedChanges = currentSuggestions;
+      currentResults.id = Date.now(); // Generate ID for this review
       
-      // Save the complete review data to storage
+      // Save the review data
       await saveReviewData(currentResults);
+      
+      // Set changes applied flag
+      changesApplied = true;
     }
     
-    // Set changesApplied flag to true
-    changesApplied = true;
+    // Display success message with additional info about toggle
+    displaySuccessMessage('Changes applied successfully!', 
+      'A toggle button has been added to the page that allows you to switch between original and modified versions.');
     
-    // Hide loading
-    hideLoading();
+    // Update UI state after success
+    document.body.setAttribute('data-popup-state', 'changes-applied');
     
-    // Check if popup is still open after apply
-    if (document.body) {
-      // Update UI state to show changes are applied
-      document.body.setAttribute('data-popup-state', 'changes-applied');
-      
-      // Enable the review button
-      if (reviewBtn) {
-        reviewBtn.disabled = false;
-      }
-      
-      // Disable the apply button to prevent double-application
-      if (applyBtn) {
-        applyBtn.disabled = true;
-      }
-      
-      // Add success message with info about the toggle button
-      displaySuccessMessage(
-        "Changes applied successfully!",
-        "A toggle button has been added to the page. <strong>Click it</strong> to switch between the original and modified versions."
-      );
-      
-      // Show the review container
-      if (reviewContainer) {
-        reviewContainer.classList.remove('hidden');
-      }
+    // Enable the review button and show its container
+    reviewBtn.disabled = false;
+    if (reviewContainer) {
+      reviewContainer.classList.remove('hidden');
     }
     
-    log("Changes applied successfully - Process complete");
+    // Save state to storage
+    await savePopupState();
+    
+    log("Changes applied successfully");
   } catch (error) {
     log("Error applying changes:", error);
+    displayError(error.message);
     
-    // Hide loading
-    hideLoading();
-    
-    // Show error state
+    // Reset UI state on error
     document.body.setAttribute('data-popup-state', 'error');
     
-    // Display error message
-    displayError(error.message);
+    // Ensure the Apply button is re-enabled on error
+    applyBtn.disabled = false;
+  } finally {
+    // Always hide loading indicator when done
+    hideLoading();
   }
 });
 
