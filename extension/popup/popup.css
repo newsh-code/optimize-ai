@@ -337,10 +337,6 @@ body[data-popup-state="analyzing"] {
   cursor: progress;
 }
 
-body[data-popup-state="analyzed"] {
-  /* After analysis is complete */
-}
-
 body[data-popup-state="processing"] {
   cursor: progress;
 }
