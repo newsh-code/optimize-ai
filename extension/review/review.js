@@ -318,265 +318,556 @@ function getSuggestionDescription(suggestion) {
 
 // Handle exporting the review data
 async function handleExport() {
-  try {
-    log("Exporting review data");
-    
-    // Check for review ID in URL parameters first
-    const urlParams = new URLSearchParams(window.location.search);
-    const reviewIdFromUrl = urlParams.get('id');
-    
-    // Get the review ID either from URL or storage
-    let reviewId;
-    if (reviewIdFromUrl) {
-      reviewId = reviewIdFromUrl;
-    } else {
-      const result = await chrome.storage.local.get('reviewId');
-      reviewId = result.reviewId;
-    }
-    
-    if (!reviewId) {
-      throw new Error("No review ID found for export");
-    }
-    
-    // Get the review data using the ID
-    const reviewResult = await chrome.storage.local.get('currentReview');
-    const reviewData = reviewResult.currentReview;
-    
-    if (!reviewData) {
-      throw new Error("No review data found to export");
-    }
-    
-    // Get screenshots separately
+  log("Export button clicked");
+  
+  // Get the current review data
+  const reviewResult = await chrome.storage.local.get('currentReview');
+  const reviewData = reviewResult.currentReview;
+  
+  if (!reviewData) {
+    showError("No review data found to export");
+    return;
+  }
+  
+  // Load screenshots if they're not already loaded
+  const reviewId = reviewData.id;
+  if (reviewId) {
     const screenshotKeys = [`screenshot_before_${reviewId}`, `screenshot_after_${reviewId}`];
     const screenshotResult = await chrome.storage.local.get(screenshotKeys);
     
-    // Create a complete data object for the report
-    const exportData = { ...reviewData };
-    
-    // Add screenshots if available
     if (screenshotResult[`screenshot_before_${reviewId}`]) {
-      exportData.beforeScreenshot = screenshotResult[`screenshot_before_${reviewId}`];
+      reviewData.beforeScreenshot = screenshotResult[`screenshot_before_${reviewId}`];
     }
     
     if (screenshotResult[`screenshot_after_${reviewId}`]) {
-      exportData.afterScreenshot = screenshotResult[`screenshot_after_${reviewId}`];
+      reviewData.afterScreenshot = screenshotResult[`screenshot_after_${reviewId}`];
     }
+  }
+  
+  // Create export dialog
+  const exportDialog = document.createElement('div');
+  exportDialog.id = 'export-dialog';
+  exportDialog.className = 'export-dialog';
+  exportDialog.innerHTML = `
+    <div class="export-content">
+      <h2>Export Options</h2>
+      <div class="export-options">
+        <button id="export-html-btn" class="export-option-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+            <path d="M12 16L6 10H18L12 16Z" fill="currentColor" />
+          </svg>
+          <span>Export HTML Report</span>
+        </button>
+        <button id="export-code-btn" class="export-option-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+            <path d="M8 3V5H6V3H8M3 3V5H1V3H3M13 3V5H11V3H13M18 3V5H16V3H18M23 3V5H21V3H23M8 8V10H6V8H8M3 8V10H1V8H3M13 8V10H11V8H13M18 8V10H16V8H18M23 8V10H21V8H23M8 13V15H6V13H8M3 13V15H1V13H3M13 13V15H11V13H13M18 13V15H16V13H18M23 13V15H21V13H23M8 18V20H6V18H8M3 18V20H1V18H3M13 18V20H11V18H13M18 18V20H16V18H18M23 18V20H21V18H23Z" fill="currentColor" />
+          </svg>
+          <span>Copy Modified Code</span>
+        </button>
+        <button id="export-cancel-btn" class="export-option-btn export-cancel">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z" fill="currentColor" />
+          </svg>
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  // Add the dialog to the document
+  document.body.appendChild(exportDialog);
+  
+  // Add event listeners to the buttons
+  document.getElementById('export-html-btn').addEventListener('click', () => {
+    exportHtmlReport(reviewData);
+    closeExportDialog();
+  });
+  
+  document.getElementById('export-code-btn').addEventListener('click', () => {
+    copyModifiedCode(reviewData);
+    closeExportDialog();
+  });
+  
+  document.getElementById('export-cancel-btn').addEventListener('click', closeExportDialog);
+  
+  // Function to close the export dialog
+  function closeExportDialog() {
+    if (exportDialog && exportDialog.parentNode) {
+      exportDialog.parentNode.removeChild(exportDialog);
+    }
+  }
+  
+  // Close dialog when clicking outside
+  exportDialog.addEventListener('click', (event) => {
+    if (event.target === exportDialog) {
+      closeExportDialog();
+    }
+  });
+}
+
+// Export HTML report
+async function exportHtmlReport(data) {
+  try {
+    log("Exporting HTML report");
     
-    // Create an HTML report
-    const html = generateHTMLReport(exportData);
+    // Generate HTML content
+    const htmlContent = generateHTMLReport(data);
     
-    // Create a blob with the HTML content
-    const blob = new Blob([html], { type: 'text/html' });
+    // Create a Blob with the HTML content
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     
-    // Create a download link
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `optimizeai-report-${new Date().toISOString().slice(0, 10)}.html`;
+    // Create a URL for the Blob
+    const url = URL.createObjectURL(blob);
     
-    // Trigger the download
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Generate filename
+    const filename = `optimizeai-report-${new Date().toISOString().split('T')[0]}.html`;
     
-    log("Report exported successfully");
+    // Download the file
+    await chrome.downloads.download({
+      url: url,
+      filename: filename,
+      saveAs: true
+    });
+    
+    // Show success message
+    showToast("HTML report exported successfully", "success");
+    
+    log("HTML report exported successfully");
   } catch (error) {
-    log("Error exporting review data:", error);
-    alert(`Failed to export report: ${error.message}`);
+    log("Error exporting HTML report:", error);
+    showToast("Error exporting HTML report: " + error.message, "error");
   }
 }
 
-// Generate an HTML report from the review data
+// Copy modified code to clipboard
+async function copyModifiedCode(data) {
+  try {
+    log("Copying modified code");
+    
+    // Check if we have suggested changes
+    if (!data.suggestedChanges || data.suggestedChanges.length === 0) {
+      showToast("No code changes to copy", "warning");
+      return;
+    }
+    
+    // Generate modified code representation
+    const codeChanges = generateCodeChanges(data.suggestedChanges);
+    
+    // Copy to clipboard
+    await navigator.clipboard.writeText(codeChanges);
+    
+    // Show success message
+    showToast("Modified code copied to clipboard", "success");
+    
+    log("Modified code copied to clipboard");
+  } catch (error) {
+    log("Error copying modified code:", error);
+    showToast("Error copying code: " + error.message, "error");
+  }
+}
+
+// Generate CSS and HTML code changes
+function generateCodeChanges(changes) {
+  // Separate CSS and HTML changes
+  const cssChanges = [];
+  const htmlChanges = [];
+  
+  changes.forEach(change => {
+    if (change.element) {
+      if (change.action === 'change_style' || change.action === 'change_color' || 
+          change.action === 'change_size' || change.action === 'increase_size') {
+        // CSS change
+        const styleValue = change.styleChanges || change.value || {};
+        
+        let cssProperties = '';
+        if (typeof styleValue === 'object') {
+          for (const [prop, value] of Object.entries(styleValue)) {
+            cssProperties += `  ${prop}: ${value};\n`;
+          }
+        } else if (change.action === 'change_color') {
+          cssProperties += `  color: ${styleValue};\n`;
+        }
+        
+        cssChanges.push(`${change.element} {\n${cssProperties}}`);
+      } else if (change.action === 'change_text') {
+        // HTML change
+        const newText = change.newText || change.value || '';
+        htmlChanges.push(`<!-- Find elements matching: ${change.element} -->\n<!-- Change content to: -->\n${newText}`);
+      } else if (change.action === 'change_attribute') {
+        // HTML attribute change
+        const attributeValue = change.attributeChanges || 
+                             (change.value && typeof change.value === 'object' ? 
+                              { [change.value.name]: change.value.value } : {});
+        
+        let attributes = '';
+        for (const [attr, value] of Object.entries(attributeValue)) {
+          attributes += ` ${attr}="${value}"`;
+        }
+        
+        htmlChanges.push(`<!-- Find elements matching: ${change.element} -->\n<!-- Add attributes: -->\n${attributes}`);
+      }
+    }
+  });
+  
+  // Combine the changes
+  let result = '';
+  
+  if (cssChanges.length > 0) {
+    result += '/* CSS Changes */\n';
+    result += '<style>\n';
+    result += cssChanges.join('\n\n');
+    result += '\n</style>\n\n';
+  }
+  
+  if (htmlChanges.length > 0) {
+    result += '<!-- HTML Changes -->\n';
+    result += htmlChanges.join('\n\n');
+    result += '\n';
+  }
+  
+  return result;
+}
+
+// Generate HTML report for export
 function generateHTMLReport(data) {
   const title = data.title || "Webpage Analysis";
   const description = data.description || "";
-  const url = data.url || "Unknown";
+  const url = data.url || "Unknown URL";
   const timestamp = formatTimestamp(data.timestamp);
   const hypothesis = data.hypothesis || "No hypothesis provided";
   
-  // Start building the HTML
-  let html = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>OptimizeAI Report - ${title}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-        header {
-          border-bottom: 1px solid #eee;
-          padding-bottom: 20px;
-          margin-bottom: 20px;
-        }
-        h1 {
-          color: #0066cc;
-        }
-        .meta {
-          background: #f5f5f5;
-          padding: 15px;
-          border-radius: 5px;
-          margin-bottom: 20px;
-        }
-        .meta p {
-          margin: 5px 0;
-        }
-        .comparison {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 20px;
-        }
-        .screenshot {
-          flex: 1;
-          border: 1px solid #ddd;
-          padding: 10px;
-          border-radius: 5px;
-        }
-        .screenshot img {
-          max-width: 100%;
-          height: auto;
-        }
-        .annotations, .changes {
-          margin-bottom: 20px;
-        }
-        .item {
-          background: #f9f9f9;
-          border-left: 3px solid #0066cc;
-          padding: 10px 15px;
-          margin-bottom: 10px;
-          border-radius: 3px;
-        }
-        .problem {
-          color: #cc0000;
-        }
-        .solution {
-          color: #007700;
-        }
-        .element {
-          font-family: monospace;
-          background: #eee;
-          padding: 3px 6px;
-          border-radius: 3px;
-        }
-        footer {
-          margin-top: 40px;
-          border-top: 1px solid #eee;
-          padding-top: 20px;
-          text-align: center;
-          font-size: 0.8em;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      <header>
-        <h1>OptimizeAI Webpage Analysis Report</h1>
-      </header>
-      
-      <section class="meta">
-        <h2>${title}</h2>
-        <p>${description}</p>
-        <p><strong>URL:</strong> ${url}</p>
-        <p><strong>Analyzed:</strong> ${timestamp}</p>
-        <p><strong>Hypothesis:</strong> ${hypothesis}</p>
-      </section>
-  `;
+  // Convert images to base64 if available
+  const beforeImage = data.beforeScreenshot || data.beforeImageData || null;
+  const afterImage = data.afterScreenshot || data.afterImageData || null;
   
-  // Add screenshots if available
-  if (data.beforeScreenshot || data.afterScreenshot) {
-    html += `
-      <section>
-        <h2>Before & After Comparison</h2>
-        <div class="comparison">
-    `;
+  // Get annotations and changes
+  const annotations = data.annotations || [];
+  const suggestedChanges = data.suggestedChanges || [];
+  
+  // Create HTML structure
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - OptimizeAI Report</title>
+  <style>
+    :root {
+      --primary-color: #4a6cf7;
+      --primary-hover: #3a5cd6;
+      --text-color: #333;
+      --text-light: #666;
+      --bg-color: #f8f9fa;
+      --card-bg: #fff;
+      --border-color: #e0e0e0;
+      --success-color: #2ecc71;
+      --warning-color: #f39c12;
+    }
     
-    if (data.beforeScreenshot) {
-      html += `
-        <div class="screenshot">
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      background-color: var(--bg-color);
+      padding: 0;
+      margin: 0;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      text-align: center;
+      padding: 30px 0;
+      background-color: var(--primary-color);
+      color: white;
+      margin-bottom: 30px;
+    }
+    
+    header h1 {
+      margin: 0;
+      font-size: 32px;
+    }
+    
+    header p {
+      margin: 10px 0 0;
+      opacity: 0.9;
+      font-size: 18px;
+    }
+    
+    header .meta {
+      margin-top: 20px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    
+    .section {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      padding: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    
+    .section h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: var(--primary-color);
+      font-size: 24px;
+    }
+    
+    .section h3 {
+      margin-top: 25px;
+      margin-bottom: 15px;
+      font-size: 20px;
+      color: var(--text-color);
+    }
+    
+    .meta-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin: 15px 0;
+    }
+    
+    .meta-item {
+      background-color: rgba(74, 108, 247, 0.05);
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .meta-item strong {
+      color: var(--primary-color);
+    }
+    
+    .hypothesis-box {
+      background-color: rgba(243, 156, 18, 0.05);
+      border-left: 4px solid var(--warning-color);
+      padding: 15px;
+      margin: 20px 0;
+      font-style: italic;
+    }
+    
+    .comparison-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    
+    .screenshot-container {
+      flex: 1;
+      min-width: 300px;
+    }
+    
+    .screenshot-container h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    
+    .screenshot {
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+    
+    .screenshot img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    
+    .no-screenshot {
+      padding: 30px;
+      text-align: center;
+      background-color: #f5f5f5;
+      color: var(--text-light);
+      font-style: italic;
+    }
+    
+    .annotation-item, .change-item {
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: rgba(74, 108, 247, 0.02);
+    }
+    
+    .annotation-title, .change-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: var(--primary-color);
+    }
+    
+    .annotation-problem {
+      margin-bottom: 8px;
+    }
+    
+    .annotation-suggestion {
+      color: var(--text-light);
+    }
+    
+    .change-element {
+      font-family: monospace;
+      background-color: rgba(0, 0, 0, 0.03);
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin: 5px 0;
+      word-break: break-all;
+    }
+    
+    .change-action {
+      margin-top: 5px;
+      color: var(--text-light);
+    }
+    
+    .code-changes {
+      background-color: #f5f5f5;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 15px;
+      margin-top: 20px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+    
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding: 20px;
+      color: var(--text-light);
+      font-size: 14px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    @media (max-width: 768px) {
+      .comparison-container {
+        flex-direction: column;
+      }
+      
+      .meta-info {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${title}</h1>
+    <p>${description}</p>
+    <div class="meta">Generated on ${new Date().toLocaleString()}</div>
+  </header>
+
+  <div class="container">
+    <section class="section">
+      <h2>Analysis Information</h2>
+      <div class="meta-info">
+        <div class="meta-item"><strong>URL:</strong> ${url}</div>
+        <div class="meta-item"><strong>Analysis Date:</strong> ${timestamp}</div>
+      </div>
+      
+      <h3>Hypothesis</h3>
+      <div class="hypothesis-box">
+        ${hypothesis}
+      </div>
+    </section>
+    
+    <section class="section">
+      <h2>Before & After Comparison</h2>
+      <div class="comparison-container">
+        <div class="screenshot-container">
           <h3>Before Changes</h3>
-          <img src="${data.beforeScreenshot}" alt="Before changes">
+          <div class="screenshot">
+            ${beforeImage ? `<img src="${beforeImage}" alt="Before changes" />` : 
+            '<div class="no-screenshot">No before screenshot available</div>'}
+          </div>
         </div>
-      `;
-    }
-    
-    if (data.afterScreenshot) {
-      html += `
-        <div class="screenshot">
+        
+        <div class="screenshot-container">
           <h3>After Changes</h3>
-          <img src="${data.afterScreenshot}" alt="After changes">
+          <div class="screenshot">
+            ${afterImage ? `<img src="${afterImage}" alt="After changes" />` : 
+            '<div class="no-screenshot">No after screenshot available</div>'}
+          </div>
         </div>
-      `;
-    }
+      </div>
+    </section>
     
-    html += `
-        </div>
-      </section>
-    `;
-  }
-  
-  // Add annotations if available
-  if (data.annotations && data.annotations.length > 0) {
-    html += `
-      <section class="annotations">
-        <h2>Identified Issues</h2>
-    `;
+    ${annotations && annotations.length > 0 ? `
+    <section class="section">
+      <h2>Identified Issues</h2>
+      <div class="annotations-list">
+        ${annotations.map(annotation => `
+          <div class="annotation-item">
+            <div class="annotation-title">${annotation.title || 'Issue'}</div>
+            <div class="annotation-problem"><strong>Problem:</strong> ${annotation.problem || ''}</div>
+            <div class="annotation-suggestion"><strong>Solution:</strong> ${annotation.suggestion || ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+    ` : ''}
     
-    data.annotations.forEach(annotation => {
-      html += `
-        <div class="item">
-          <h3>${annotation.title}</h3>
-          <p class="problem"><strong>Problem:</strong> ${annotation.problem}</p>
-          <p class="solution"><strong>Solution:</strong> ${annotation.suggestion}</p>
-        </div>
-      `;
-    });
-    
-    html += `
-      </section>
-    `;
-  }
-  
-  // Add changes if available
-  if (data.suggestedChanges && data.suggestedChanges.length > 0) {
-    html += `
-      <section class="changes">
-        <h2>Applied Changes</h2>
-    `;
-    
-    data.suggestedChanges.forEach(change => {
-      const title = getSuggestionTitle(change.action);
-      const description = getSuggestionDescription(change);
+    ${suggestedChanges && suggestedChanges.length > 0 ? `
+    <section class="section">
+      <h2>Applied Changes</h2>
+      <div class="changes-list">
+        ${suggestedChanges.map(change => `
+          <div class="change-item">
+            <div class="change-title">${getSuggestionTitle(change.action)}</div>
+            <div class="change-element">${change.element || ''}</div>
+            <div class="change-action">${getSuggestionDescription(change)}</div>
+          </div>
+        `).join('')}
+      </div>
       
-      html += `
-        <div class="item">
-          <h3>${title}</h3>
-          <p class="element">${change.element}</p>
-          <p>${description}</p>
-        </div>
-      `;
-    });
+      <h3>Generated Code</h3>
+      <div class="code-changes">${generateCodeChanges(suggestedChanges)}</div>
+    </section>
+    ` : ''}
     
-    html += `
-      </section>
-    `;
-  }
+    <div class="footer">
+      <p>Generated by OptimizeAI - AI-powered webpage optimization tool</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Show a toast message
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
   
-  // Close the HTML
-  html += `
-      <footer>
-        <p>Generated by OptimizeAI Chrome Extension on ${new Date().toLocaleString()}</p>
-      </footer>
-    </body>
-    </html>
-  `;
+  document.body.appendChild(toast);
   
-  return html;
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
 }
 
 // Show loading state
