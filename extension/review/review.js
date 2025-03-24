@@ -422,20 +422,47 @@ async function exportHtmlReport(data) {
     // Generate filename
     const filename = `optimizeai-report-${new Date().toISOString().split('T')[0]}.html`;
     
-    // Download the file
-    await chrome.downloads.download({
-      url: url,
-      filename: filename,
-      saveAs: true
-    });
+    // Try to use the Chrome Downloads API first
+    if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+      await chrome.downloads.download({
+        url: url,
+        filename: filename,
+        saveAs: true
+      });
+      
+      log("HTML report exported successfully via Chrome Downloads API");
+    } else {
+      // Fallback to using a regular anchor download if Chrome Downloads API is not available
+      log("Chrome Downloads API not available, using fallback download method");
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      
+      // Append to document, click and remove
+      document.body.appendChild(a);
+      a.click();
+      
+      // Small delay before removing the element
+      await new Promise(resolve => setTimeout(resolve, 100));
+      document.body.removeChild(a);
+      
+      log("HTML report exported successfully via fallback method");
+    }
     
     // Show success message
     showToast("HTML report exported successfully", "success");
     
-    log("HTML report exported successfully");
   } catch (error) {
     log("Error exporting HTML report:", error);
     showToast("Error exporting HTML report: " + error.message, "error");
+  } finally {
+    // Best practice to revoke object URLs when done with them
+    try {
+      if (url) URL.revokeObjectURL(url);
+    } catch (e) {
+      // Ignore errors when revoking
+    }
   }
 }
 
