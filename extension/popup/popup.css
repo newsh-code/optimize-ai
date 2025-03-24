@@ -1,477 +1,139 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+/* Custom styles that aren't covered by DaisyUI */
+
+/* Ensure all relevant classes for JavaScript functionality are preserved */
+.hidden {
+  display: none !important;
 }
 
+/* Make the popup a reasonable size */
 body {
-  background-color: #f8f9fa;
-  color: #212529;
+  min-width: 400px;
+  max-width: 500px;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
-.container {
-  width: 450px;
-  padding: 16px;
-}
-
-h1 {
-  font-size: 18px;
-  color: #212529;
-  margin-bottom: 16px;
-  text-align: center;
-}
-
-h2 {
-  font-size: 16px;
-  margin-bottom: 8px;
-}
-
-h3 {
-  font-size: 14px;
-  margin-bottom: 8px;
-  color: #495057;
-}
-
-.section {
-  background-color: #ffffff;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+/* Custom styling for elements that need specific appearances */
+.screenshot-img {
+  max-width: 100%;
+  border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.nested-section {
-  background-color: #f8f9fa;
-  box-shadow: none;
-  border: 1px solid #e9ecef;
-  margin-top: 16px;
+/* Custom styling for annotations and suggestions */
+.annotations-list .issue-name {
+  font-weight: bold;
+  margin-right: 8px;
 }
 
-.description {
-  font-size: 14px;
-  color: #6c757d;
-  margin-bottom: 12px;
-}
-
-textarea {
-  width: 100%;
-  height: 80px;
-  padding: 12px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  resize: none;
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.button-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.button-row.centered {
-  justify-content: center;
-}
-
-button {
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.2s;
-}
-
-.primary-btn {
-  background-color: #0d6efd;
-  color: white;
-}
-
-.primary-btn:hover {
-  background-color: #0b5ed7;
-}
-
-.secondary-btn {
-  background-color: #6c757d;
-  color: white;
-}
-
-.secondary-btn:hover {
-  background-color: #5c636a;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.footer {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.hidden {
-  display: none;
-}
-
-#loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 12px;
-}
-
-.spinner {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #0d6efd;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 8px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-#suggestions-container, #annotations-list {
-  margin-bottom: 16px;
-}
-
-.suggestion-item {
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 8px;
-}
-
-.suggestion-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.suggestion-element {
-  font-family: monospace;
+.issue-severity {
   font-size: 12px;
-  color: #6c757d;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
 }
 
-.suggestion-action {
+.severity-high {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: rgb(185, 28, 28);
+}
+
+.severity-medium {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: rgb(180, 83, 9);
+}
+
+.severity-low {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: rgb(30, 64, 175);
+}
+
+.issue-description {
   margin-top: 4px;
   font-size: 14px;
 }
 
-/* Annotation styles */
-.annotation-item {
-  background-color: #e9ecef;
-  border-left: 4px solid #0d6efd;
+/* Suggestion items styling */
+.suggestion-item {
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 8px;
-}
-
-.annotation-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #212529;
-}
-
-.annotation-problem {
-  font-size: 13px;
-  color: #dc3545;
-  margin-bottom: 4px;
-}
-
-.annotation-suggestion {
-  font-size: 13px;
-  color: #198754;
-}
-
-#analysis-header {
-  margin-bottom: 16px;
-}
-
-#analysis-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-#analysis-description {
-  margin-bottom: 0;
-}
-
-#annotations-container {
-  margin-bottom: 16px;
-}
-
-#suggestions-section {
-  margin-bottom: 16px;
-}
-
-/* Error message styles */
-.error-message {
-  background-color: #f8d7da;
-  border: 1px solid #f5c2c7;
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 16px;
-  color: #842029;
-}
-
-.error-message p {
-  margin-bottom: 8px;
-}
-
-.error-message p:last-child {
-  margin-bottom: 0;
-}
-
-.error-help {
-  font-size: 12px;
-  color: #6c757d;
-}
-
-/* Add styles for the screenshot container */
-.screenshot-container {
-  margin-bottom: 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 15px;
-  background-color: #f9f9f9;
-}
-
-.screenshot-header {
+  padding: 10px;
   margin-bottom: 10px;
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
-.screenshot-header h3 {
-  margin: 0 0 5px 0;
-  color: #333;
-}
-
-.screenshot-info {
-  color: #666;
-  font-size: 0.85em;
-  margin: 0 0 10px 0;
-}
-
-.screenshot-image {
-  width: 100%;
-  max-height: 300px;
-  overflow: auto;
-  margin-bottom: 10px;
-  border: 1px solid #ddd;
-  background: white;
-}
-
-.screenshot-image img {
-  max-width: 100%;
+.suggestion-selector {
+  font-family: monospace;
+  font-weight: bold;
   display: block;
-}
-
-.screenshot-actions {
-  text-align: right;
-}
-
-.secondary-btn {
-  background-color: #f0f0f0;
-  color: #333;
-  border: 1px solid #ccc;
-  padding: 6px 12px;
+  margin-bottom: 6px;
+  padding: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85em;
 }
 
-.secondary-btn:hover {
-  background-color: #e0e0e0;
+.suggestion-changes {
+  font-size: 14px;
 }
 
+.change-item {
+  margin: 3px 0;
+}
+
+.property {
+  font-weight: bold;
+}
+
+/* Success message styling */
 .success-message {
-  background-color: #d4edda;
-  color: #155724;
-  padding: 10px 15px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  border: 1px solid #c3e6cb;
+  padding: 10px;
+  line-height: 1.5;
 }
 
 .additional-info {
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #6c757d;
-  margin-bottom: 15px;
-}
-
-.additional-info a {
-  color: #0d6efd;
-  text-decoration: none;
-}
-
-.additional-info a:hover {
-  text-decoration: underline;
-}
-
-#review-container {
-  display: inline-block;
-}
-
-#review-container.hidden {
-  display: none;
-}
-
-/* Popup state-based styles */
-body[data-popup-state="initial"] {
-  /* Default state */
-}
-
-body[data-popup-state="analyzing"] {
-  cursor: progress;
-}
-
-body[data-popup-state="analyzed"] {
-  /* After analysis is complete */
-}
-
-body[data-popup-state="processing"] {
-  cursor: progress;
-}
-
-body[data-popup-state="changes-applied"] .success-message {
-  animation: highlight 1.5s ease-out;
-}
-
-body[data-popup-state="error"] .error-message {
-  animation: shake 0.5s ease-in-out;
-}
-
-@keyframes highlight {
-  0% { background-color: #c3e6cb; }
-  100% { background-color: #d4edda; }
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-5px); }
-  40%, 80% { transform: translateX(5px); }
-}
-
-#success-message-container {
-  margin: 15px 0;
-}
-
-.hypothesis-input {
-  width: 100%;
-  resize: vertical;
-  min-height: 80px;
-  padding: 10px;
-  border-radius: 4px;
-  border: 1px solid #ced4da;
-  font-family: inherit;
   font-size: 14px;
-  margin-bottom: 15px;
+  margin-top: 8px;
+  line-height: 1.4;
 }
 
-/* Workflow stage indicators */
-.workflow-indicator {
+/* Handle popup states */
+[data-popup-state="error"] .error-box {
+  display: block;
+}
+
+/* Custom styles for code highlighting */
+code, .code {
+  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Animation for loading spinner (provided by DaisyUI but with custom timing) */
+.loading {
+  animation: loading 1.5s infinite;
+}
+
+/* State-specific display rules */
+[data-popup-state="initial"] #initial-view {
+  display: block;
+}
+
+[data-popup-state="analyzing"] #loading {
   display: flex;
-  justify-content: center;
-  margin-bottom: 16px;
 }
 
-.workflow-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 25%;
+[data-popup-state="results"] #results-section {
+  display: block;
 }
 
-.step-circle {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: #e9ecef;
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 12px;
-  color: #6c757d;
+[data-popup-state="error"] .error-message {
+  display: block;
 }
 
-.step-circle.active {
-  background-color: #0d6efd;
-  color: white;
-}
-
-/* Loading state transitions */
-.loading-container {
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  visibility: hidden;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(255, 255, 255, 0.9);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.loading-container:not(.hidden) {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Specific state for loading on button actions */
-body[data-loading="true"] .loading-container {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Different loading message styles based on action type */
-body[data-popup-state="analyzing"] #loading-message {
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-body[data-popup-state="processing"] #loading-message {
-  color: #3498db;
-  font-weight: 500;
-}
-
-body[data-popup-state="applying"] #loading-message {
-  color: #27ae60;
-  font-weight: 500;
-}
-
-/* Ensure smooth transitions between states */
-#initial-view, #analysis-view, #results-section {
-  transition: opacity 0.25s ease;
-}
-
-#initial-view.hidden, #analysis-view.hidden, #results-section.hidden {
-  opacity: 0;
-  height: 0;
-  overflow: hidden;
-}
-
-#initial-view:not(.hidden), #analysis-view:not(.hidden), #results-section:not(.hidden) {
-  opacity: 1;
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  body {
+    min-width: 320px;
+  }
 } 

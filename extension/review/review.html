@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OptimizeAI - Review Changes</title>
+  <link rel="stylesheet" href="review.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>OptimizeAI Review</h1>
+      <div class="header-actions">
+        <button id="export-btn" class="primary-btn">Export Report</button>
+        <button id="close-btn" class="secondary-btn">Close</button>
+      </div>
+    </header>
+    
+    <div id="loading" class="loading-container">
+      <div class="spinner"></div>
+      <p>Loading analysis data...</p>
+    </div>
+    
+    <div id="content" class="content hidden">
+      <section id="info-section" class="section">
+        <h2 id="analysis-title">Webpage Analysis</h2>
+        <p id="analysis-description" class="description"></p>
+        <div class="meta-info">
+          <div id="url-info" class="meta-item">URL: <span id="page-url"></span></div>
+          <div id="time-info" class="meta-item">Analyzed: <span id="analysis-time"></span></div>
+          <div id="hypothesis-info" class="meta-item">Hypothesis: <span id="hypothesis-text"></span></div>
+        </div>
+      </section>
+      
+      <section id="comparison-section" class="section">
+        <h2>Before & After Comparison</h2>
+        <div class="comparison-container">
+          <div class="screenshot-container before">
+            <h3>Before Changes</h3>
+            <div class="screenshot">
+              <img id="before-screenshot" src="" alt="Before changes" />
+            </div>
+          </div>
+          <div class="screenshot-container after">
+            <h3>After Changes</h3>
+            <div class="screenshot">
+              <img id="after-screenshot" src="" alt="After changes" />
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <section id="annotations-section" class="section">
+        <h2>Identified Issues</h2>
+        <div id="annotations-list" class="annotations-list">
+          <!-- Annotations will be added here -->
+        </div>
+      </section>
+      
+      <section id="changes-section" class="section">
+        <h2>Applied Changes</h2>
+        <div id="changes-list" class="changes-list">
+          <!-- Applied changes will be added here -->
+        </div>
+      </section>
+    </div>
+    
+    <div id="error-container" class="error-container hidden">
+      <div class="error-message">
+        <h2>Error Loading Review Data</h2>
+        <p id="error-text">Unable to load analysis data. Please try again or go back to the extension popup.</p>
+        <button id="reload-btn" class="primary-btn">Reload</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="review.js"></script>
+</body>
+</html> 

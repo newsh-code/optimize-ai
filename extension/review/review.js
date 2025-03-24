@@ -344,74 +344,166 @@ async function handleExport() {
     }
   }
   
-  // Create export dialog
-  const exportDialog = document.createElement('div');
-  exportDialog.id = 'export-dialog';
-  exportDialog.className = 'export-dialog';
-  exportDialog.innerHTML = `
-    <div class="export-content">
-      <h2>Export Options</h2>
-      <div class="export-options">
-        <button id="export-html-btn" class="export-option-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-            <path d="M12 16L6 10H18L12 16Z" fill="currentColor" />
-          </svg>
-          <span>Export HTML Report</span>
-        </button>
-        <button id="export-code-btn" class="export-option-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-            <path d="M8 3V5H6V3H8M3 3V5H1V3H3M13 3V5H11V3H13M18 3V5H16V3H18M23 3V5H21V3H23M8 8V10H6V8H8M3 8V10H1V8H3M13 8V10H11V8H13M18 8V10H16V8H18M23 8V10H21V8H23M8 13V15H6V13H8M3 13V15H1V13H3M13 13V15H11V13H13M18 13V15H16V13H18M23 13V15H21V13H23M8 18V20H6V18H8M3 18V20H1V18H3M13 18V20H11V18H13M18 18V20H16V18H18M23 18V20H21V18H23Z" fill="currentColor" />
-          </svg>
-          <span>Copy Modified Code</span>
-        </button>
-        <button id="export-cancel-btn" class="export-option-btn export-cancel">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z" fill="currentColor" />
-          </svg>
-          <span>Cancel</span>
-        </button>
-      </div>
-    </div>
-  `;
-  
-  // Add the dialog to the document
-  document.body.appendChild(exportDialog);
-  
-  // Add event listeners to the buttons
-  document.getElementById('export-html-btn').addEventListener('click', () => {
-    exportHtmlReport(reviewData);
-    closeExportDialog();
-  });
-  
-  document.getElementById('export-code-btn').addEventListener('click', () => {
-    copyModifiedCode(reviewData);
-    closeExportDialog();
-  });
-  
-  document.getElementById('export-cancel-btn').addEventListener('click', closeExportDialog);
-  
-  // Function to close the export dialog
-  function closeExportDialog() {
-    if (exportDialog && exportDialog.parentNode) {
-      exportDialog.parentNode.removeChild(exportDialog);
-    }
-  }
-  
-  // Close dialog when clicking outside
-  exportDialog.addEventListener('click', (event) => {
-    if (event.target === exportDialog) {
-      closeExportDialog();
-    }
-  });
+  // Show export dialog
+  showExportDialog();
 }
 
-// Export HTML report
-async function exportHtmlReport(data) {
+// Show export dialog
+function showExportDialog() {
+  // Create dialog if it doesn't exist
+  if (!document.querySelector('.export-dialog')) {
+    const dialog = document.createElement('div');
+    dialog.className = 'export-dialog';
+
+    const content = document.createElement('div');
+    content.className = 'export-content';
+    
+    const title = document.createElement('h2');
+    title.className = 'text-xl font-bold mb-4 text-center';
+    title.textContent = 'Export Options';
+    
+    const options = document.createElement('div');
+    options.className = 'export-options';
+    
+    // HTML option
+    const htmlBtn = document.createElement('button');
+    htmlBtn.className = 'export-option-btn';
+    htmlBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+      <span>HTML</span>
+    `;
+    htmlBtn.addEventListener('click', () => {
+      exportAsHTML();
+      hideExportDialog();
+    });
+    
+    // Image option
+    const imageBtn = document.createElement('button');
+    imageBtn.className = 'export-option-btn';
+    imageBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+      </svg>
+      <span>Images</span>
+    `;
+    imageBtn.addEventListener('click', () => {
+      exportAsImages();
+      hideExportDialog();
+    });
+    
+    // Code changes option
+    const codeBtn = document.createElement('button');
+    codeBtn.className = 'export-option-btn';
+    codeBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 18 22 12 16 6"></polyline>
+        <polyline points="8 6 2 12 8 18"></polyline>
+      </svg>
+      <span>Code</span>
+    `;
+    codeBtn.addEventListener('click', () => {
+      exportAsCode();
+      hideExportDialog();
+    });
+    
+    // Cancel option
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'export-option-btn export-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', hideExportDialog);
+    
+    options.appendChild(htmlBtn);
+    options.appendChild(imageBtn);
+    options.appendChild(codeBtn);
+    
+    content.appendChild(title);
+    content.appendChild(options);
+    content.appendChild(cancelBtn);
+    
+    dialog.appendChild(content);
+    document.body.appendChild(dialog);
+    
+    // Click outside to close
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) {
+        hideExportDialog();
+      }
+    });
+  }
+  
+  // Show dialog with animation
+  const dialog = document.querySelector('.export-dialog');
+  dialog.classList.add('show');
+}
+
+// Hide export dialog
+function hideExportDialog() {
+  const dialog = document.querySelector('.export-dialog');
+  if (dialog) {
+    dialog.classList.remove('show');
+  }
+}
+
+// Show a toast message
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
+}
+
+// Show loading state
+function showLoading() {
+  loadingEl.classList.remove('hidden');
+  contentEl.classList.add('hidden');
+  errorContainerEl.classList.add('hidden');
+}
+
+// Hide loading state
+function hideLoading() {
+  loadingEl.classList.add('hidden');
+}
+
+// Show content
+function showContent() {
+  contentEl.classList.remove('hidden');
+}
+
+// Show error message
+function showError(message) {
+  errorTextEl.textContent = message;
+  errorContainerEl.classList.remove('hidden');
+  contentEl.classList.add('hidden');
+}
+
+// Export as HTML report
+function exportAsHTML() {
   try {
     log("Exporting HTML report");
     
     // Generate HTML content
-    const htmlContent = generateHTMLReport(data);
+    const htmlContent = generateHTMLReport(reviewData);
     
     // Create a Blob with the HTML content
     const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -424,13 +516,17 @@ async function exportHtmlReport(data) {
     
     // Try to use the Chrome Downloads API first
     if (chrome.downloads && typeof chrome.downloads.download === 'function') {
-      await chrome.downloads.download({
+      chrome.downloads.download({
         url: url,
         filename: filename,
         saveAs: true
+      }, () => {
+        // Revoke URL after download starts
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
       
       log("HTML report exported successfully via Chrome Downloads API");
+      showToast("HTML report exported successfully", "success");
     } else {
       // Fallback to using a regular anchor download if Chrome Downloads API is not available
       log("Chrome Downloads API not available, using fallback download method");
@@ -443,53 +539,150 @@ async function exportHtmlReport(data) {
       document.body.appendChild(a);
       a.click();
       
-      // Small delay before removing the element
-      await new Promise(resolve => setTimeout(resolve, 100));
-      document.body.removeChild(a);
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
       
       log("HTML report exported successfully via fallback method");
+      showToast("HTML report exported successfully", "success");
     }
-    
-    // Show success message
-    showToast("HTML report exported successfully", "success");
-    
   } catch (error) {
     log("Error exporting HTML report:", error);
     showToast("Error exporting HTML report: " + error.message, "error");
-  } finally {
-    // Best practice to revoke object URLs when done with them
-    try {
-      if (url) URL.revokeObjectURL(url);
-    } catch (e) {
-      // Ignore errors when revoking
-    }
   }
 }
 
-// Copy modified code to clipboard
-async function copyModifiedCode(data) {
+// Export screenshots as images
+function exportAsImages() {
   try {
-    log("Copying modified code");
+    log("Exporting screenshots");
+    
+    // Get before and after screenshots
+    const beforeImg = document.getElementById('before-screenshot');
+    const afterImg = document.getElementById('after-screenshot');
+    
+    if (!beforeImg.src && !afterImg.src) {
+      showToast("No screenshots available to export", "warning");
+      return;
+    }
+    
+    // Create a zip file if both screenshots are available
+    if (beforeImg.src && afterImg.src) {
+      // For now, we'll just download them individually
+      // In a future enhancement, we could use JSZip to package them together
+      downloadImage(beforeImg.src, 'before-screenshot.png');
+      setTimeout(() => {
+        downloadImage(afterImg.src, 'after-screenshot.png');
+      }, 1000); // Delay second download to avoid browser blocking
+    } else if (beforeImg.src) {
+      downloadImage(beforeImg.src, 'before-screenshot.png');
+    } else if (afterImg.src) {
+      downloadImage(afterImg.src, 'after-screenshot.png');
+    }
+    
+    showToast("Screenshots downloaded", "success");
+  } catch (error) {
+    log("Error exporting screenshots:", error);
+    showToast("Error exporting screenshots: " + error.message, "error");
+  }
+}
+
+// Helper function to download an image
+function downloadImage(dataUrl, filename) {
+  if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+    chrome.downloads.download({
+      url: dataUrl,
+      filename: filename,
+      saveAs: false
+    });
+  } else {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+    }, 500);
+  }
+}
+
+// Export code changes
+function exportAsCode() {
+  try {
+    log("Exporting code changes");
     
     // Check if we have suggested changes
-    if (!data.suggestedChanges || data.suggestedChanges.length === 0) {
-      showToast("No code changes to copy", "warning");
+    if (!reviewData.suggestedChanges || reviewData.suggestedChanges.length === 0) {
+      showToast("No code changes to export", "warning");
       return;
     }
     
     // Generate modified code representation
-    const codeChanges = generateCodeChanges(data.suggestedChanges);
+    const codeChanges = generateCodeChanges(reviewData.suggestedChanges);
     
-    // Copy to clipboard
-    await navigator.clipboard.writeText(codeChanges);
-    
-    // Show success message
-    showToast("Modified code copied to clipboard", "success");
-    
-    log("Modified code copied to clipboard");
+    // Try to copy to clipboard
+    navigator.clipboard.writeText(codeChanges)
+      .then(() => {
+        showToast("Code changes copied to clipboard", "success");
+        log("Code changes copied to clipboard");
+      })
+      .catch((error) => {
+        log("Clipboard API failed, trying fallback method", error);
+        
+        // Fallback method - create a temporary textarea
+        const textarea = document.createElement('textarea');
+        textarea.value = codeChanges;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            showToast("Code changes copied to clipboard", "success");
+          } else {
+            throw new Error("execCommand copy failed");
+          }
+        } catch (err) {
+          log("Fallback clipboard method failed", err);
+          
+          // If all else fails, offer download
+          const blob = new Blob([codeChanges], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const filename = `optimizeai-code-changes-${new Date().toISOString().split('T')[0]}.txt`;
+          
+          if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+            chrome.downloads.download({
+              url: url,
+              filename: filename,
+              saveAs: true
+            }, () => {
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            });
+          } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 1000);
+          }
+          
+          showToast("Code changes saved as file", "info");
+        } finally {
+          document.body.removeChild(textarea);
+        }
+      });
   } catch (error) {
-    log("Error copying modified code:", error);
-    showToast("Error copying code: " + error.message, "error");
+    log("Error exporting code changes:", error);
+    showToast("Error exporting code changes: " + error.message, "error");
   }
 }
 
@@ -571,24 +764,40 @@ function generateHTMLReport(data) {
   const annotations = data.annotations || [];
   const suggestedChanges = data.suggestedChanges || [];
   
-  // Create HTML structure
+  // Create HTML structure with modern DaisyUI-like styling
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} - OptimizeAI Report</title>
   <style>
+    /* Base styles that mimic DaisyUI */
     :root {
-      --primary-color: #4a6cf7;
-      --primary-hover: #3a5cd6;
-      --text-color: #333;
-      --text-light: #666;
-      --bg-color: #f8f9fa;
-      --card-bg: #fff;
-      --border-color: #e0e0e0;
-      --success-color: #2ecc71;
-      --warning-color: #f39c12;
+      --primary: #570df8;
+      --primary-focus: #4406cb;
+      --primary-content: #ffffff;
+      --secondary: #f000b8;
+      --secondary-focus: #bd0091;
+      --secondary-content: #ffffff;
+      --accent: #37cdbe;
+      --accent-focus: #2aa79b;
+      --accent-content: #ffffff;
+      --neutral: #3d4451;
+      --neutral-focus: #2a2e37;
+      --neutral-content: #ffffff;
+      --base-100: #ffffff;
+      --base-200: #f2f2f2;
+      --base-300: #e5e6e6;
+      --base-content: #1f2937;
+      --success: #36d399;
+      --success-content: #ffffff;
+      --warning: #fbbd23;
+      --warning-content: #ffffff;
+      --error: #f87272;
+      --error-content: #ffffff;
+      --info: #3abff8;
+      --info-content: #ffffff;
     }
     
     * {
@@ -600,8 +809,8 @@ function generateHTMLReport(data) {
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       line-height: 1.6;
-      color: var(--text-color);
-      background-color: var(--bg-color);
+      color: var(--base-content);
+      background-color: var(--base-200);
       padding: 0;
       margin: 0;
     }
@@ -609,179 +818,182 @@ function generateHTMLReport(data) {
     .container {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 2rem;
     }
     
+    /* Header styling */
     header {
       text-align: center;
-      padding: 30px 0;
-      background-color: var(--primary-color);
-      color: white;
-      margin-bottom: 30px;
+      padding: 2rem 1rem;
+      background-color: var(--primary);
+      color: var(--primary-content);
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     
     header h1 {
       margin: 0;
-      font-size: 32px;
+      font-size: 2rem;
     }
     
     header p {
-      margin: 10px 0 0;
+      margin: 0.75rem 0 0;
       opacity: 0.9;
-      font-size: 18px;
+      font-size: 1.125rem;
     }
     
     header .meta {
-      margin-top: 20px;
-      font-size: 14px;
+      margin-top: 1.25rem;
+      font-size: 0.875rem;
       opacity: 0.8;
     }
     
-    .section {
-      background-color: var(--card-bg);
-      border-radius: 8px;
-      padding: 25px;
-      margin-bottom: 30px;
+    /* Card styling */
+    .card {
+      background-color: var(--base-100);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     }
     
-    .section h2 {
+    .card h2 {
       margin-top: 0;
-      margin-bottom: 20px;
-      color: var(--primary-color);
-      font-size: 24px;
+      margin-bottom: 1.25rem;
+      color: var(--primary);
+      font-size: 1.5rem;
     }
     
-    .section h3 {
-      margin-top: 25px;
-      margin-bottom: 15px;
-      font-size: 20px;
-      color: var(--text-color);
+    .card h3 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+      color: var(--neutral);
     }
     
+    /* Meta info and badges */
     .meta-info {
       display: flex;
       flex-wrap: wrap;
-      gap: 15px;
-      margin: 15px 0;
+      gap: 1rem;
+      margin: 1rem 0;
     }
     
-    .meta-item {
-      background-color: rgba(74, 108, 247, 0.05);
-      padding: 10px 15px;
-      border-radius: 6px;
-      font-size: 14px;
+    .badge {
+      background-color: var(--base-200);
+      padding: 0.625rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
     }
     
-    .meta-item strong {
-      color: var(--primary-color);
+    .badge-primary {
+      background-color: var(--primary);
+      color: var(--primary-content);
     }
     
-    .hypothesis-box {
-      background-color: rgba(243, 156, 18, 0.05);
-      border-left: 4px solid var(--warning-color);
-      padding: 15px;
-      margin: 20px 0;
-      font-style: italic;
+    .badge-accent {
+      background-color: var(--accent);
+      color: var(--accent-content);
     }
     
-    .comparison-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      margin-top: 20px;
+    /* Hypothesis box */
+    .alert {
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0.375rem;
     }
     
-    .screenshot-container {
-      flex: 1;
-      min-width: 300px;
+    .alert-warning {
+      background-color: rgba(251, 189, 35, 0.1);
+      border-left: 4px solid var(--warning);
     }
     
-    .screenshot-container h3 {
-      margin-top: 0;
-      margin-bottom: 10px;
+    /* Comparison styling */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.25rem;
     }
     
-    .screenshot {
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
+    .image-wrapper {
+      border: 1px solid var(--base-300);
+      border-radius: 0.375rem;
       overflow: hidden;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      background-color: var(--base-100);
     }
     
-    .screenshot img {
+    .image-wrapper img {
       width: 100%;
       height: auto;
       display: block;
     }
     
-    .no-screenshot {
-      padding: 30px;
+    .image-placeholder {
+      padding: 2rem;
       text-align: center;
-      background-color: #f5f5f5;
-      color: var(--text-light);
+      background-color: var(--base-200);
+      color: var(--base-content);
       font-style: italic;
     }
     
+    /* Annotations and changes */
     .annotation-item, .change-item {
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background-color: rgba(74, 108, 247, 0.02);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 0.375rem;
+      border: 1px solid var(--base-300);
+      background-color: var(--base-100);
     }
     
-    .annotation-title, .change-title {
+    .annotation-item {
+      border-left: 4px solid var(--primary);
+    }
+    
+    .change-item {
+      border-left: 4px solid var(--secondary);
+    }
+    
+    .item-title {
       font-weight: bold;
-      margin-bottom: 5px;
-      color: var(--primary-color);
+      margin-bottom: 0.5rem;
+      color: var(--primary);
     }
     
-    .annotation-problem {
-      margin-bottom: 8px;
+    .item-label {
+      font-weight: bold;
+      color: var(--neutral);
     }
     
-    .annotation-suggestion {
-      color: var(--text-light);
-    }
-    
-    .change-element {
+    .code-block {
       font-family: monospace;
-      background-color: rgba(0, 0, 0, 0.03);
-      padding: 5px 10px;
-      border-radius: 4px;
-      margin: 5px 0;
-      word-break: break-all;
-    }
-    
-    .change-action {
-      margin-top: 5px;
-      color: var(--text-light);
-    }
-    
-    .code-changes {
-      background-color: #f5f5f5;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 15px;
-      margin-top: 20px;
-      font-family: monospace;
+      background-color: var(--base-200);
+      padding: 1rem;
+      border-radius: 0.375rem;
+      margin: 1rem 0;
       white-space: pre-wrap;
       overflow-x: auto;
     }
     
+    /* Footer styling */
     .footer {
       text-align: center;
-      margin-top: 40px;
-      padding: 20px;
-      color: var(--text-light);
-      font-size: 14px;
-      border-top: 1px solid var(--border-color);
+      margin-top: 2.5rem;
+      padding: 1.25rem;
+      color: var(--base-content);
+      opacity: 0.7;
+      font-size: 0.875rem;
+      border-top: 1px solid var(--base-300);
     }
     
+    /* Responsive adjustments */
     @media (max-width: 768px) {
-      .comparison-container {
-        flex-direction: column;
+      .container {
+        padding: 1rem;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
       }
       
       .meta-info {
@@ -798,71 +1010,67 @@ function generateHTMLReport(data) {
   </header>
 
   <div class="container">
-    <section class="section">
+    <div class="card">
       <h2>Analysis Information</h2>
       <div class="meta-info">
-        <div class="meta-item"><strong>URL:</strong> ${url}</div>
-        <div class="meta-item"><strong>Analysis Date:</strong> ${timestamp}</div>
+        <div class="badge badge-primary">URL: ${url}</div>
+        <div class="badge badge-accent">Analysis Date: ${timestamp}</div>
       </div>
       
       <h3>Hypothesis</h3>
-      <div class="hypothesis-box">
+      <div class="alert alert-warning">
         ${hypothesis}
       </div>
-    </section>
+    </div>
     
-    <section class="section">
+    <div class="card">
       <h2>Before & After Comparison</h2>
-      <div class="comparison-container">
-        <div class="screenshot-container">
+      <div class="grid">
+        <div>
           <h3>Before Changes</h3>
-          <div class="screenshot">
+          <div class="image-wrapper">
             ${beforeImage ? `<img src="${beforeImage}" alt="Before changes" />` : 
-            '<div class="no-screenshot">No before screenshot available</div>'}
+            '<div class="image-placeholder">No before screenshot available</div>'}
           </div>
         </div>
         
-        <div class="screenshot-container">
+        <div>
           <h3>After Changes</h3>
-          <div class="screenshot">
+          <div class="image-wrapper">
             ${afterImage ? `<img src="${afterImage}" alt="After changes" />` : 
-            '<div class="no-screenshot">No after screenshot available</div>'}
+            '<div class="image-placeholder">No after screenshot available</div>'}
           </div>
         </div>
       </div>
-    </section>
+    </div>
     
     ${annotations && annotations.length > 0 ? `
-    <section class="section">
+    <div class="card">
       <h2>Identified Issues</h2>
-      <div class="annotations-list">
-        ${annotations.map(annotation => `
-          <div class="annotation-item">
-            <div class="annotation-title">${annotation.title || 'Issue'}</div>
-            <div class="annotation-problem"><strong>Problem:</strong> ${annotation.problem || ''}</div>
-            <div class="annotation-suggestion"><strong>Solution:</strong> ${annotation.suggestion || ''}</div>
-          </div>
-        `).join('')}
-      </div>
-    </section>
+      ${annotations.map(annotation => `
+        <div class="annotation-item">
+          <div class="item-title">${annotation.title || 'Issue'}</div>
+          <div><span class="item-label">Problem:</span> ${annotation.problem || ''}</div>
+          <div><span class="item-label">Solution:</span> ${annotation.suggestion || ''}</div>
+        </div>
+      `).join('')}
+    </div>
     ` : ''}
     
     ${suggestedChanges && suggestedChanges.length > 0 ? `
-    <section class="section">
+    <div class="card">
       <h2>Applied Changes</h2>
-      <div class="changes-list">
-        ${suggestedChanges.map(change => `
-          <div class="change-item">
-            <div class="change-title">${getSuggestionTitle(change.action)}</div>
-            <div class="change-element">${change.element || ''}</div>
-            <div class="change-action">${getSuggestionDescription(change)}</div>
-          </div>
-        `).join('')}
-      </div>
+      ${suggestedChanges.map(change => `
+        <div class="change-item">
+          <div class="item-title">${getSuggestionTitle(change.action)}</div>
+          <div class="code-block">${change.element || ''}</div>
+          <div>${getSuggestionDescription(change)}</div>
+        </div>
+      `).join('')}
       
       <h3>Generated Code</h3>
-      <div class="code-changes">${generateCodeChanges(suggestedChanges)}</div>
-    </section>
+      <div class="code-block">${generateCodeChanges(suggestedChanges)}</div>
+    </div>
     ` : ''}
     
     <div class="footer">
@@ -871,52 +1079,4 @@ function generateHTMLReport(data) {
   </div>
 </body>
 </html>`;
-}
-
-// Show a toast message
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  
-  document.body.appendChild(toast);
-  
-  // Trigger animation
-  setTimeout(() => {
-    toast.classList.add('show');
-  }, 10);
-  
-  // Remove after 3 seconds
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-    }, 300);
-  }, 3000);
-}
-
-// Show loading state
-function showLoading() {
-  loadingEl.classList.remove('hidden');
-  contentEl.classList.add('hidden');
-  errorContainerEl.classList.add('hidden');
-}
-
-// Hide loading state
-function hideLoading() {
-  loadingEl.classList.add('hidden');
-}
-
-// Show content
-function showContent() {
-  contentEl.classList.remove('hidden');
-}
-
-// Show error message
-function showError(message) {
-  errorTextEl.textContent = message;
-  errorContainerEl.classList.remove('hidden');
-  contentEl.classList.add('hidden');
 } 
