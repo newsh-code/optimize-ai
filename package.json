@@ -1,0 +1,26 @@
+{
+  "name": "testtracker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/newsh-code/optimize-ai.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/newsh-code/optimize-ai/issues"
+  },
+  "homepage": "https://github.com/newsh-code/optimize-ai#readme",
+  "description": "",
+  "devDependencies": {
+    "tailwindcss": "^4.0.15"
+  },
+  "dependencies": {
+    "daisyui": "^5.0.9"
+  }
+}
