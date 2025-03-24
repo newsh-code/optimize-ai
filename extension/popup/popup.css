@@ -333,10 +333,6 @@ button {
 }
 
 /* Popup state-based styles */
-body[data-popup-state="initial"] {
-  /* Default state */
-}
-
 body[data-popup-state="analyzing"] {
   cursor: progress;
 }
