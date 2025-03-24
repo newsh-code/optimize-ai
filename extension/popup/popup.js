@@ -539,6 +539,14 @@ applyBtn.addEventListener('click', async (e) => {
   // Prevent default button behavior to avoid issues
   e.preventDefault();
   
+  // Check if we have suggestions to apply
+  if (!currentSuggestions || !currentSuggestions.length) {
+    displayError("No suggestions to apply");
+    return;
+  }
+  
+  log(`Preparing to apply ${currentSuggestions.length} suggestions to the DOM`);
+  
   // Capture important DOM elements to keep references even if popup is recreated
   const domElements = {
     initial: initialView,
@@ -563,6 +571,7 @@ applyBtn.addEventListener('click', async (e) => {
     
     // Get the active tab
     const tab = await getCurrentTab();
+    log(`Active tab: ${tab.id} - ${tab.url}`);
     
     // Show loading 
     showLoading("Applying changes to webpage...");
@@ -585,6 +594,22 @@ applyBtn.addEventListener('click', async (e) => {
     
     const storedSuggestions = JSON.parse(JSON.stringify(currentSuggestions || []));
     
+    // Verify suggestions format is as expected
+    storedSuggestions.forEach((suggestion, index) => {
+      log(`Suggestion ${index+1}:`, suggestion);
+      
+      // Ensure each suggestion has the necessary properties
+      if (!suggestion.elementInfo) {
+        log("Warning: Suggestion missing elementInfo:", suggestion);
+      } else if (!suggestion.elementInfo.xpath) {
+        log("Warning: Suggestion missing xpath:", suggestion.elementInfo);
+      }
+      
+      if (!suggestion.action) {
+        log("Warning: Suggestion missing action:", suggestion);
+      }
+    });
+    
     // Save state to storage in case popup reloads
     try {
       await chrome.storage.local.set({
@@ -605,27 +630,38 @@ applyBtn.addEventListener('click', async (e) => {
     }
     
     // Send changes to content script
+    log("Sending applyChanges message to content script with", storedSuggestions.length, "suggestions");
     await new Promise((resolve, reject) => {
       chrome.tabs.sendMessage(
         tab.id,
         { 
           action: 'applyChanges', 
-          changes: currentSuggestions,
+          changes: storedSuggestions,
           preventPopupClose: true // Signal to keep popup open
         },
         (response) => {
-          log("Received response from content script", response);
+          log("Received response from content script:", response);
           
           if (chrome.runtime.lastError) {
+            log("Chrome runtime error:", chrome.runtime.lastError);
             reject(new Error(chrome.runtime.lastError.message));
             return;
           }
           
+          if (!response) {
+            log("Warning: No response received from content script");
+            reject(new Error("No response received from content script"));
+            return;
+          }
+          
           if (response && response.success) {
+            log("Content script applied changes successfully:", response);
             resolve(response);
           } else if (response && response.error) {
+            log("Content script reported error:", response.error);
             reject(new Error(response.error));
           } else {
+            log("Unknown response from content script:", response);
             reject(new Error("Unknown error applying changes"));
           }
         }
@@ -642,8 +678,9 @@ applyBtn.addEventListener('click', async (e) => {
     window.focus();
     
     // Capture the "after" screenshot
+    log("Capturing after-changes screenshot");
     afterScreenshot = await captureScreenshot(tab.id);
-    log("Captured after-changes screenshot");
+    log("Captured after-changes screenshot successfully");
     
     // Update the current results with the after screenshot
     if (currentResults) {
@@ -686,7 +723,7 @@ applyBtn.addEventListener('click', async (e) => {
       }
     }
     
-    log("Changes applied successfully");
+    log("Changes applied successfully - Process complete");
   } catch (error) {
     log("Error applying changes:", error);
     

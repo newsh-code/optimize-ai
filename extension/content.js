@@ -174,6 +174,31 @@ function applyChangesToDOM(suggestions) {
   let changesMade = 0;
   
   try {
+    // Add a debug div to show that changes are being applied
+    const debugDiv = document.createElement('div');
+    debugDiv.id = 'ai-debug-overlay';
+    debugDiv.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 4px;
+      z-index: 9999;
+      font-family: monospace;
+      max-width: 300px;
+      font-size: 12px;
+    `;
+    document.body.appendChild(debugDiv);
+    
+    // Create a list to track changes
+    const changesList = document.createElement('ul');
+    changesList.style.margin = '5px 0';
+    changesList.style.paddingLeft = '20px';
+    debugDiv.innerHTML = `<strong>OptimizeAI Changes:</strong>`;
+    debugDiv.appendChild(changesList);
+    
     for (const suggestion of suggestions) {
       if (!suggestion.elementInfo || !suggestion.elementInfo.xpath) {
         log('Missing elementInfo or xpath in suggestion', suggestion);
@@ -183,57 +208,143 @@ function applyChangesToDOM(suggestions) {
       const element = getElementByXPath(suggestion.elementInfo.xpath);
       if (!element) {
         log(`Element not found for xpath: ${suggestion.elementInfo.xpath}`);
+        
+        // Add to debug overlay
+        const errorItem = document.createElement('li');
+        errorItem.style.color = '#ff6b6b';
+        errorItem.textContent = `Element not found: ${suggestion.elementInfo.xpath.substring(0, 30)}...`;
+        changesList.appendChild(errorItem);
+        
         continue;
       }
       
+      // Create a highlight effect around the element to make it clear it's being modified
+      const origOutline = element.style.outline;
+      element.style.outline = '2px solid #4285f4';
+      element.style.transition = 'outline 0.5s ease-in-out';
+      
+      // Store the original state
       saveOriginalState(element, suggestion.action);
+      
+      // Track if this specific element was changed
+      let elementChanged = false;
       
       if (suggestion.action === 'change_text' && suggestion.newText) {
         log(`Changing text for element ${suggestion.elementInfo.xpath}`);
+        log(`  From: "${element.textContent}"`);
+        log(`  To: "${suggestion.newText}"`);
         element.textContent = suggestion.newText;
         changesMade++;
+        elementChanged = true;
       } else if (suggestion.action === 'change_style' && suggestion.styleChanges) {
         log(`Changing style for element ${suggestion.elementInfo.xpath}`);
+        log(`  Style changes:`, suggestion.styleChanges);
         Object.keys(suggestion.styleChanges).forEach(property => {
+          log(`    ${property}: ${element.style[property]} -> ${suggestion.styleChanges[property]}`);
           element.style[property] = suggestion.styleChanges[property];
         });
         changesMade++;
+        elementChanged = true;
       } else if (suggestion.action === 'change_attribute' && suggestion.attributeChanges) {
         log(`Changing attributes for element ${suggestion.elementInfo.xpath}`);
+        log(`  Attribute changes:`, suggestion.attributeChanges);
         Object.keys(suggestion.attributeChanges).forEach(attribute => {
+          log(`    ${attribute}: ${element.getAttribute(attribute)} -> ${suggestion.attributeChanges[attribute]}`);
           element.setAttribute(attribute, suggestion.attributeChanges[attribute]);
         });
         changesMade++;
+        elementChanged = true;
       } else if (suggestion.action === 'change_size' && suggestion.sizeChanges) {
         log(`Changing size for element ${suggestion.elementInfo.xpath}`);
+        log(`  Size changes:`, suggestion.sizeChanges);
         if (suggestion.sizeChanges.width) {
+          log(`    width: ${element.style.width} -> ${suggestion.sizeChanges.width}`);
           element.style.width = suggestion.sizeChanges.width;
         }
         if (suggestion.sizeChanges.height) {
+          log(`    height: ${element.style.height} -> ${suggestion.sizeChanges.height}`);
           element.style.height = suggestion.sizeChanges.height;
         }
         changesMade++;
+        elementChanged = true;
       } else if (suggestion.action === 'change_color' && suggestion.colorChanges) {
         log(`Changing color for element ${suggestion.elementInfo.xpath}`);
+        log(`  Color changes:`, suggestion.colorChanges);
         if (suggestion.colorChanges.textColor) {
+          log(`    color: ${element.style.color} -> ${suggestion.colorChanges.textColor}`);
           element.style.color = suggestion.colorChanges.textColor;
         }
         if (suggestion.colorChanges.backgroundColor) {
+          log(`    backgroundColor: ${element.style.backgroundColor} -> ${suggestion.colorChanges.backgroundColor}`);
           element.style.backgroundColor = suggestion.colorChanges.backgroundColor;
         }
         changesMade++;
+        elementChanged = true;
       }
+      
+      // Add the element to the debug list if it was changed
+      if (elementChanged) {
+        const changeItem = document.createElement('li');
+        changeItem.textContent = `${suggestion.action} on ${element.tagName.toLowerCase()}`;
+        if (element.id) {
+          changeItem.textContent += `#${element.id}`;
+        } else if (element.className) {
+          changeItem.textContent += `.${element.className.split(' ')[0]}`;
+        }
+        changesList.appendChild(changeItem);
+        
+        // Scroll the element into view if it's not already visible
+        if (!isElementInViewport(element)) {
+          element.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+      }
+      
+      // After a delay, remove the highlight outline
+      setTimeout(() => {
+        element.style.outline = origOutline;
+      }, 2000);
     }
     
     // Create toggle button after changes are applied
     if (changesMade > 0) {
       createToggleButton();
+      
+      // Add a summary to the debug overlay
+      const summary = document.createElement('p');
+      summary.textContent = `✅ ${changesMade} changes applied`;
+      summary.style.marginTop = '10px';
+      summary.style.fontWeight = 'bold';
+      debugDiv.appendChild(summary);
+      
+      // Auto-remove the debug overlay after 5 seconds
+      setTimeout(() => {
+        if (debugDiv && debugDiv.parentNode) {
+          debugDiv.parentNode.removeChild(debugDiv);
+        }
+      }, 5000);
+    } else {
+      // No changes applied
+      debugDiv.innerHTML += `<p style="color: #ff6b6b;">⚠️ No changes were applied</p>`;
+      
+      // Auto-remove faster if no changes
+      setTimeout(() => {
+        if (debugDiv && debugDiv.parentNode) {
+          debugDiv.parentNode.removeChild(debugDiv);
+        }
+      }, 3000);
     }
     
     log(`Successfully applied ${changesMade} changes to DOM`);
     return { success: true, changesMade };
   } catch (error) {
     log(`Error applying changes to DOM: ${error.message}`);
+    
+    // Show error in debug overlay if it exists
+    const debugDiv = document.getElementById('ai-debug-overlay');
+    if (debugDiv) {
+      debugDiv.innerHTML += `<p style="color: #ff6b6b;">❌ Error: ${error.message}</p>`;
+    }
+    
     return { success: false, error: error.message };
   }
 }
@@ -356,6 +467,17 @@ function saveOriginalState(element, changeType) {
 
     originalElementStates.set(element.id, originalState);
   }
+}
+
+// Helper function to check if element is in viewport
+function isElementInViewport(element) {
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  );
 }
 
 // Listen for messages from the popup or background script
