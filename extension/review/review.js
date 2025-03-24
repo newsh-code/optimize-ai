@@ -108,23 +108,34 @@ async function loadReviewData() {
     
     // Load screenshots separately
     const screenshotKeys = [`screenshot_before_${reviewId}`, `screenshot_after_${reviewId}`];
-    const screenshotResult = await chrome.storage.local.get(screenshotKeys);
     
-    // Add screenshots back to the review data
-    const fullReviewData = { ...reviewData };
-    
-    if (screenshotResult[`screenshot_before_${reviewId}`]) {
-      fullReviewData.beforeScreenshot = screenshotResult[`screenshot_before_${reviewId}`];
-      log("Loaded before screenshot");
+    try {
+      const screenshotResult = await chrome.storage.local.get(screenshotKeys);
+      
+      // Add screenshots back to the review data
+      const fullReviewData = { ...reviewData };
+      
+      if (screenshotResult[`screenshot_before_${reviewId}`]) {
+        fullReviewData.beforeScreenshot = screenshotResult[`screenshot_before_${reviewId}`];
+        log("Loaded before screenshot, size:", Math.round(fullReviewData.beforeScreenshot.length / 1024), "KB");
+      } else {
+        log("Before screenshot not found in storage");
+      }
+      
+      if (screenshotResult[`screenshot_after_${reviewId}`]) {
+        fullReviewData.afterScreenshot = screenshotResult[`screenshot_after_${reviewId}`];
+        log("Loaded after screenshot, size:", Math.round(fullReviewData.afterScreenshot.length / 1024), "KB");
+      } else {
+        log("After screenshot not found in storage");
+      }
+      
+      // Display the review data
+      displayReviewData(fullReviewData);
+    } catch (storageError) {
+      log("Error loading screenshots:", storageError);
+      // Continue without screenshots
+      displayReviewData(reviewData);
     }
-    
-    if (screenshotResult[`screenshot_after_${reviewId}`]) {
-      fullReviewData.afterScreenshot = screenshotResult[`screenshot_after_${reviewId}`];
-      log("Loaded after screenshot");
-    }
-    
-    // Display the review data
-    displayReviewData(fullReviewData);
     
     hideLoading();
     showContent();
@@ -151,16 +162,34 @@ function displayReviewData(data) {
   
   // Display the screenshots
   if (data.beforeScreenshot) {
-    beforeScreenshotEl.src = data.beforeScreenshot;
-    log("Displaying before screenshot");
+    // Create a new Image to ensure proper loading
+    const beforeImg = new Image();
+    beforeImg.onload = () => {
+      beforeScreenshotEl.src = data.beforeScreenshot;
+      log("Before screenshot displayed successfully");
+    };
+    beforeImg.onerror = (e) => {
+      log("Error loading before screenshot:", e);
+      beforeScreenshotEl.parentElement.innerHTML = '<div class="no-screenshot">Error loading screenshot</div>';
+    };
+    beforeImg.src = data.beforeScreenshot;
   } else {
     log("No before screenshot available");
     beforeScreenshotEl.parentElement.innerHTML = '<div class="no-screenshot">No screenshot available</div>';
   }
   
   if (data.afterScreenshot) {
-    afterScreenshotEl.src = data.afterScreenshot;
-    log("Displaying after screenshot");
+    // Create a new Image to ensure proper loading
+    const afterImg = new Image();
+    afterImg.onload = () => {
+      afterScreenshotEl.src = data.afterScreenshot;
+      log("After screenshot displayed successfully");
+    };
+    afterImg.onerror = (e) => {
+      log("Error loading after screenshot:", e);
+      afterScreenshotEl.parentElement.innerHTML = '<div class="no-screenshot">Error loading screenshot</div>';
+    };
+    afterImg.src = data.afterScreenshot;
   } else {
     log("No after screenshot available");
     afterScreenshotEl.parentElement.innerHTML = '<div class="no-screenshot">Changes not yet applied</div>';

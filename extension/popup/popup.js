@@ -64,6 +64,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     reviewBtn.disabled = true;
   }
   
+  // Clean up old screenshots to prevent storage quota issues
+  try {
+    await cleanupOldScreenshots();
+  } catch (error) {
+    log("Error cleaning up old screenshots:", error);
+    // Non-critical error, continue with initialization
+  }
+  
   // Check for saved state
   await checkAndRestorePopupState();
   
@@ -195,6 +203,50 @@ async function captureScreenshot(tabId) {
     log("Error in captureScreenshot function:", error);
     throw error;
   }
+}
+
+// Compress image to reduce storage size
+async function compressImage(dataUrl, maxWidth = 800, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        // Create a canvas element to resize the image
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions if larger than maxWidth
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = Math.floor(height * ratio);
+        }
+        
+        // Set canvas dimensions and draw the resized image
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to compressed data URL
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        
+        // Log compression stats
+        const originalSize = Math.round(dataUrl.length / 1024);
+        const compressedSize = Math.round(compressedDataUrl.length / 1024);
+        const savingsPercent = Math.round((1 - compressedSize / originalSize) * 100);
+        log(`Image compressed: ${originalSize}KB → ${compressedSize}KB (${savingsPercent}% savings)`);
+        
+        resolve(compressedDataUrl);
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image for compression'));
+      img.src = dataUrl;
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 // Display the screenshot in the UI
@@ -415,6 +467,11 @@ function displayAnalysisResults(results) {
   analysisTitle.textContent = results.title || "Page Analysis";
   analysisDescription.textContent = results.description || "";
   
+  // Display annotations immediately if available
+  if (results.annotations && results.annotations.length > 0) {
+    displayAnnotations(results.annotations);
+  }
+  
   // Display screenshot if available
   if (results.screenshotUrl) {
     log("Screenshot URL found in results, displaying it");
@@ -422,12 +479,6 @@ function displayAnalysisResults(results) {
   } else {
     log("No screenshot URL in results");
     screenshotContainer.classList.add('hidden');
-  }
-  
-  // Display annotations if available
-  if (results.annotations && results.annotations.length > 0) {
-    displayAnnotations(results.annotations);
-    annotationsContainer.classList.remove('hidden');
   }
 }
 
@@ -447,6 +498,14 @@ function displayVariationResults(results) {
 // Display annotations in the UI
 function displayAnnotations(annotations) {
   annotationsList.innerHTML = '';
+  
+  if (!annotations || !annotations.length) {
+    annotationsContainer.classList.add('hidden');
+    return;
+  }
+  
+  // Show the container since we have annotations
+  annotationsContainer.classList.remove('hidden');
   
   annotations.forEach(annotation => {
     const item = document.createElement('div');
@@ -719,8 +778,29 @@ async function saveReviewData(data) {
     data.id = reviewId;
     
     // Store screenshots separately to avoid exceeding quota
-    const beforeScreenshot = data.beforeScreenshot;
-    const afterScreenshot = data.afterScreenshot;
+    let beforeScreenshot = data.beforeScreenshot;
+    let afterScreenshot = data.afterScreenshot;
+    
+    // Compress screenshots before storing
+    if (beforeScreenshot) {
+      try {
+        beforeScreenshot = await compressImage(beforeScreenshot, 800, 0.7);
+        log("Before screenshot compressed successfully");
+      } catch (compressionError) {
+        log("Error compressing before screenshot:", compressionError);
+        // Continue with uncompressed image if compression fails
+      }
+    }
+    
+    if (afterScreenshot) {
+      try {
+        afterScreenshot = await compressImage(afterScreenshot, 800, 0.7);
+        log("After screenshot compressed successfully");
+      } catch (compressionError) {
+        log("Error compressing after screenshot:", compressionError);
+        // Continue with uncompressed image if compression fails
+      }
+    }
     
     // Remove screenshots from the main data object
     const reviewData = { ...data };
@@ -735,15 +815,27 @@ async function saveReviewData(data) {
     
     // Store screenshots separately with smaller keys
     if (beforeScreenshot) {
-      await chrome.storage.local.set({
-        [`screenshot_before_${reviewId}`]: beforeScreenshot
-      });
+      try {
+        await chrome.storage.local.set({
+          [`screenshot_before_${reviewId}`]: beforeScreenshot
+        });
+        log("Before screenshot saved to storage successfully");
+      } catch (storageError) {
+        log("Error saving before screenshot:", storageError);
+        throw new Error("Failed to save before screenshot: " + storageError.message);
+      }
     }
     
     if (afterScreenshot) {
-      await chrome.storage.local.set({
-        [`screenshot_after_${reviewId}`]: afterScreenshot
-      });
+      try {
+        await chrome.storage.local.set({
+          [`screenshot_after_${reviewId}`]: afterScreenshot
+        });
+        log("After screenshot saved to storage successfully");
+      } catch (storageError) {
+        log("Error saving after screenshot:", storageError);
+        throw new Error("Failed to save after screenshot: " + storageError.message);
+      }
     }
     
     log("Review data saved to storage with ID:", reviewId);
@@ -991,5 +1083,52 @@ async function checkAndRestorePopupState() {
     }
   } catch (error) {
     log("Error restoring popup state:", error);
+  }
+}
+
+// Clean up old screenshots from storage to prevent quota issues
+async function cleanupOldScreenshots() {
+  try {
+    log("Cleaning up old screenshots from storage");
+    
+    // Get all keys in storage
+    const data = await chrome.storage.local.get(null);
+    const keys = Object.keys(data);
+    
+    // Find screenshot keys
+    const screenshotKeys = keys.filter(key => 
+      key.startsWith('screenshot_before_') || 
+      key.startsWith('screenshot_after_')
+    );
+    
+    // If we have more than 4 screenshots, remove the oldest ones
+    if (screenshotKeys.length > 4) {
+      log(`Found ${screenshotKeys.length} screenshots in storage, cleaning up`);
+      
+      // Extract timestamps from keys
+      const keyData = screenshotKeys.map(key => {
+        const parts = key.split('_');
+        const timestamp = parseInt(parts[parts.length - 1], 10);
+        return { key, timestamp };
+      });
+      
+      // Sort by timestamp (oldest first)
+      keyData.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Get keys to remove (keep the 4 most recent)
+      const keysToRemove = keyData.slice(0, keyData.length - 4).map(item => item.key);
+      
+      // Remove old screenshots
+      if (keysToRemove.length > 0) {
+        log(`Removing ${keysToRemove.length} old screenshots:`, keysToRemove);
+        await chrome.storage.local.remove(keysToRemove);
+        log("Old screenshots removed successfully");
+      }
+    } else {
+      log(`Only ${screenshotKeys.length} screenshots in storage, no cleanup needed`);
+    }
+  } catch (error) {
+    log("Error cleaning up screenshots:", error);
+    throw error;
   }
 } 
