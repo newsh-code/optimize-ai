@@ -49,10 +49,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (analysisHeader && analysisHeader.parentNode) {
       analysisHeader.parentNode.insertBefore(screenshotContainer, analysisHeader.nextSibling);
     } else {
-      // Fallback: add to results section
-      resultsSection.appendChild(screenshotContainer);
+      log("Warning: Could not find analysis header element");
     }
   }
+  
+  // Listen for status updates from the background script
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === "STATUS_UPDATE") {
+      // Handle status update message
+      log("Status update received:", message.status);
+      
+      if (message.status === "error") {
+        // Display error message and hide loading indicator
+        hideLoading();
+        displayError(message.error || "Unknown error occurred");
+      } else {
+        // Update loading message with current status
+        if (!loadingEl.classList.contains('hidden')) {
+          loadingMsg.textContent = message.status;
+        } else if (message.status !== "Processing AI response..." && 
+                  message.status !== "Processing AI suggestions...") {
+          // Show loading with the status message, but not for final processing steps
+          // as they are very quick and would cause flickering
+          showLoading(message.status);
+        }
+      }
+      
+      // Always respond to avoid "The message port closed before a response was received" errors
+      sendResponse({received: true});
+      return true; // Keep the message channel open for async response
+    }
+  });
   
   // Ensure review container is hidden initially
   if (reviewContainer) {

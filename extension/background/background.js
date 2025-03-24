@@ -8,10 +8,9 @@ const BACKEND_CONFIG = {
   // OpenAI Multimodal API endpoint
   MULTIMODAL_ENDPOINT: "https://api.openai.com/v1/chat/completions",
   // API Key
-  API_KEY: "your-api-key-here", // Replace with your actual API key when deploying
+  API_KEY: "your-openai-api-key", // Replace with your actual API key when deploying
   // For development/testing, set to false to use real API
-  USE_MOCK_API: true
-
+  USE_MOCK_API: true // Set to false to use the real API
 };
 
 // Enable logging for debugging
@@ -159,11 +158,9 @@ async function captureVisibleTab(tabId) {
 
 // Extract base64 data from a data URL
 function extractBase64FromDataUrl(dataUrl) {
-  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.includes(',')) {
-    log("Invalid data URL format:", dataUrl ? dataUrl.substring(0, 50) + "..." : "null");
-    return null;
-  }
-  return dataUrl.split(",")[1];
+  if (!dataUrl) return null;
+  const matches = dataUrl.match(/^data:image\/\w+;base64,(.+)$/);
+  return matches ? matches[1] : null;
 }
 
 // Get visible DOM elements from the page
@@ -393,20 +390,234 @@ async function mockMultimodalApiResponse(screenshot, visibleDOM, hypothesis = nu
   });
 }
 
-// Analyze webpage with multimodal processing
-async function analyzeWebpage(tabId, hypothesis, initialAnalysis = false) {
+// Helper function to make API calls to OpenAI
+async function callOpenAI(endpoint, requestData) {
   try {
-    log(`Analyzing webpage for tab ${tabId}`, initialAnalysis ? "as initial analysis" : "with hypothesis:", hypothesis);
+    log("Calling OpenAI API with:", endpoint);
     
-    // Get screenshot of the current tab
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BACKEND_CONFIG.API_KEY}`
+      },
+      body: JSON.stringify(requestData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMessage = errorData?.error?.message || response.statusText;
+      const statusCode = response.status;
+      
+      // Log detailed error information
+      log(`API Error (${statusCode}):`, errorMessage);
+      
+      // Handle specific error cases
+      if (statusCode === 401) {
+        throw new Error("API key is invalid or expired. Please check your API key.");
+      } else if (statusCode === 429) {
+        throw new Error("Rate limit exceeded. Please try again later.");
+      } else if (statusCode === 400 && errorMessage.includes("maximum context length")) {
+        throw new Error("The input is too large for the model to process. Try with a smaller image or less text.");
+      } else {
+        throw new Error(`OpenAI API error (${statusCode}): ${errorMessage}`);
+      }
+    }
+    
+    return await response.json();
+  } catch (error) {
+    log("Error calling OpenAI API:", error);
+    
+    // Enhance network errors with more user-friendly messages
+    if (error.message === "Failed to fetch" || error.name === "TypeError") {
+      throw new Error("Network error when connecting to OpenAI. Please check your internet connection.");
+    }
+    
+    throw error;
+  }
+}
+
+// Parse OpenAI multimodal response into our expected format
+function parseMultimodalResponse(apiResponse, screenshotUrl, hypothesis, initialAnalysis) {
+  try {
+    const responseContent = apiResponse.choices[0].message.content;
+    log("Raw API response content:", responseContent);
+    
+    // Try to extract structured data from the response
+    let parsedResponse;
+    try {
+      // Look for JSON in the response
+      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || 
+                        responseContent.match(/```([\s\S]*?)```/);
+      
+      if (jsonMatch && jsonMatch[1]) {
+        parsedResponse = JSON.parse(jsonMatch[1]);
+      } else {
+        // If no JSON found, parse the text into our format
+        parsedResponse = {
+          summary: responseContent.split('\n\n')[0] || "Analysis completed",
+          annotations: [],
+          suggestions: []
+        };
+        
+        // Extract annotations (usually in bullet points)
+        const annotationMatch = responseContent.match(/Annotations:([\s\S]*?)(?=Suggestions:|$)/i);
+        if (annotationMatch) {
+          const annotationText = annotationMatch[1];
+          parsedResponse.annotations = annotationText
+            .split(/\n-|\n\d+\./)
+            .filter(item => item.trim().length > 0)
+            .map(item => ({ text: item.trim() }));
+        }
+        
+        // Extract suggestions
+        const suggestionsMatch = responseContent.match(/Suggestions:([\s\S]*?)(?=$)/i);
+        if (suggestionsMatch) {
+          const suggestionsText = suggestionsMatch[1];
+          parsedResponse.suggestions = suggestionsText
+            .split(/\n-|\n\d+\./)
+            .filter(item => item.trim().length > 0)
+            .map(item => {
+              const parts = item.split(/:(.+)/);
+              return {
+                element: parts[0]?.trim() || "Page element",
+                change: parts[1]?.trim() || item.trim()
+              };
+            });
+        }
+      }
+    } catch (parseError) {
+      log("Error parsing API response:", parseError);
+      // Fallback to simple format
+      parsedResponse = {
+        summary: "Analysis completed with parsing issues",
+        annotations: [{ text: responseContent }],
+        suggestions: []
+      };
+    }
+    
+    // Ensure the response has the expected format
+    return {
+      beforeScreenshot: screenshotUrl,
+      hypothesis: hypothesis || "",
+      summary: parsedResponse.summary || "Analysis completed",
+      annotations: parsedResponse.annotations || [],
+      suggestions: parsedResponse.suggestions || [],
+      isInitialAnalysis: !!initialAnalysis
+    };
+  } catch (error) {
+    log("Error parsing multimodal response:", error);
+    throw error;
+  }
+}
+
+// Parse OpenAI text-only response
+function parseTextResponse(apiResponse, hypothesis) {
+  try {
+    const responseContent = apiResponse.choices[0].message.content;
+    log("Raw API text response:", responseContent);
+    
+    // Try to extract structured data from the response
+    let parsedResponse;
+    try {
+      // Look for JSON in the response
+      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || 
+                        responseContent.match(/```([\s\S]*?)```/);
+      
+      if (jsonMatch && jsonMatch[1]) {
+        parsedResponse = JSON.parse(jsonMatch[1]);
+      } else {
+        // If no JSON found, parse the text into our format
+        parsedResponse = {
+          summary: responseContent.split('\n\n')[0] || "Analysis completed",
+          suggestions: []
+        };
+        
+        // Extract suggestions
+        const lines = responseContent.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line.match(/^\d+\.|^-/)) {
+            const parts = line.replace(/^\d+\.|-/, '').trim().split(/:(.+)/);
+            if (parts.length >= 2) {
+              parsedResponse.suggestions.push({
+                element: parts[0].trim(),
+                change: parts[1].trim()
+              });
+            } else {
+              parsedResponse.suggestions.push({
+                element: "Page element",
+                change: parts[0].trim()
+              });
+            }
+          }
+        }
+      }
+    } catch (parseError) {
+      log("Error parsing text API response:", parseError);
+      // Fallback to simple format
+      parsedResponse = {
+        summary: "Interpretation completed with parsing issues",
+        suggestions: [{ 
+          element: "General", 
+          change: responseContent 
+        }]
+      };
+    }
+    
+    return {
+      hypothesis: hypothesis,
+      summary: parsedResponse.summary || "Interpretation completed",
+      suggestions: parsedResponse.suggestions || []
+    };
+  } catch (error) {
+    log("Error parsing text response:", error);
+    throw error;
+  }
+}
+
+// Send a status update to the popup
+function sendStatusUpdate(tabId, status, error = null) {
+  try {
+    chrome.runtime.sendMessage({
+      type: "STATUS_UPDATE",
+      tabId: tabId,
+      status: status,
+      error: error
+    }).catch(err => {
+      // This is normal if the popup isn't open - don't log as an error
+      if (DEBUG && !err.message.includes("receiving end does not exist")) {
+        log("Error sending status update:", err);
+      }
+    });
+  } catch (err) {
+    // Catch any other errors that might occur
+    if (DEBUG) {
+      log("Error in sendStatusUpdate:", err);
+    }
+  }
+}
+
+// Analyze a webpage with the provided hypothesis
+async function analyzeWebpage(tabId, hypothesis = null, initialAnalysis = false) {
+  try {
+    log(`Analyzing webpage for tab ${tabId} with hypothesis: ${hypothesis}`);
+    
+    // Inform the user we're starting analysis
+    sendStatusUpdate(tabId, "Capturing screenshot...");
+    
+    // Capture a screenshot of the visible tab area
     const screenshotUrl = await captureVisibleTab(tabId);
+    
+    // Update status
+    sendStatusUpdate(tabId, "Processing page elements...");
     
     // Get visible DOM elements
     const visibleDOM = await getVisibleDOM(tabId);
     
-    log(`Successfully captured screenshot and DOM (${visibleDOM.length} elements)`);
+    log(`Found ${visibleDOM.length} visible DOM elements`);
     
-    // Extract base64 image data for API call
+    // Extract the base64 data from the data URL
     const base64Screenshot = extractBase64FromDataUrl(screenshotUrl);
     
     if (!base64Screenshot) {
@@ -415,18 +626,23 @@ async function analyzeWebpage(tabId, hypothesis, initialAnalysis = false) {
     
     // If using mock API for testing
     if (BACKEND_CONFIG.USE_MOCK_API) {
+      // Update status for mock API
+      sendStatusUpdate(tabId, "Using mock data (testing mode)...");
       return mockMultimodalApiResponse(screenshotUrl, visibleDOM, hypothesis, initialAnalysis);
     }
     
-    // TODO: Real API implementation
-    // This would call the actual OpenAI API or your backend service
+    // Update status for real API call
+    sendStatusUpdate(tabId, initialAnalysis 
+      ? "Analyzing page with AI..." 
+      : "Analyzing page based on hypothesis...");
+    
     // Prepare the payload for multimodal model
     const requestData = {
       model: "gpt-4-vision-preview",
       messages: [
         {
           role: "system",
-          content: "You are a webpage optimization expert with deep knowledge of conversion rate optimization (CRO) best practices. Analyze the provided screenshot and webpage structure to identify opportunities for improvement."
+          content: "You are a webpage optimization expert with deep knowledge of conversion rate optimization (CRO) best practices. Analyze the provided screenshot and webpage structure to identify opportunities for improvement. Provide your response in a structured format with Summary, Annotations, and Suggestions sections. For suggestions, specify both the target element and the recommended change."
         },
         {
           role: "user",
@@ -449,11 +665,18 @@ async function analyzeWebpage(tabId, hypothesis, initialAnalysis = false) {
       max_tokens: 1000
     };
     
-    // For full implementation, this would make a real API call
-    // For now, return mock data
-    return mockMultimodalApiResponse(screenshotUrl, visibleDOM, hypothesis, initialAnalysis);
+    // Make the real API call
+    const apiResponse = await callOpenAI(BACKEND_CONFIG.MULTIMODAL_ENDPOINT, requestData);
+    
+    // Update status for processing the response
+    sendStatusUpdate(tabId, "Processing AI response...");
+    
+    // Parse the response
+    return parseMultimodalResponse(apiResponse, screenshotUrl, hypothesis, initialAnalysis);
   } catch (error) {
     log("Error in analyzeWebpage:", error);
+    // Send error status to the popup
+    sendStatusUpdate(tabId, "error", error.message);
     throw error;
   }
 }
@@ -463,10 +686,16 @@ async function createVariation(tabId, hypothesis, baseAnalysis) {
   try {
     log(`Creating variation for tab ${tabId} with hypothesis: ${hypothesis}`);
     
+    // Inform the user we're starting the variation process
+    sendStatusUpdate(tabId, "Preparing to create variation...");
+    
     // Use the existing screenshot from base analysis if available
     const screenshotUrl = baseAnalysis && baseAnalysis.beforeScreenshot 
       ? baseAnalysis.beforeScreenshot 
       : await captureVisibleTab(tabId);
+    
+    // Update status
+    sendStatusUpdate(tabId, "Analyzing page elements...");
     
     // Get visible DOM elements
     const visibleDOM = await getVisibleDOM(tabId);
@@ -475,16 +704,60 @@ async function createVariation(tabId, hypothesis, baseAnalysis) {
     
     // If using mock API for testing
     if (BACKEND_CONFIG.USE_MOCK_API) {
+      // Update status for mock API
+      sendStatusUpdate(tabId, "Using mock data (testing mode)...");
       return mockMultimodalApiResponse(screenshotUrl, visibleDOM, hypothesis, false);
     }
     
-    // TODO: Real API implementation for variation creation
-    // This would use the actual OpenAI API or your backend service
+    // Extract the base64 data from the data URL
+    const base64Screenshot = extractBase64FromDataUrl(screenshotUrl);
     
-    // For now, return mock data
-    return mockMultimodalApiResponse(screenshotUrl, visibleDOM, hypothesis, false);
+    if (!base64Screenshot) {
+      throw new Error("Failed to extract image data from screenshot");
+    }
+    
+    // Update status for real API call
+    sendStatusUpdate(tabId, "Creating variation with AI...");
+    
+    // Prepare the request data
+    const requestData = {
+      model: "gpt-4-vision-preview",
+      messages: [
+        {
+          role: "system",
+          content: "You are a conversion rate optimization expert. Generate specific webpage modifications based on the user's hypothesis and the current webpage screenshot. Provide your response in a structured format with Summary and Suggestions sections. For each suggestion, specify both the target element and the recommended change."
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Generate specific webpage element modifications based on this hypothesis: "${hypothesis}". Look at the current page and suggest practical changes that could be implemented.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${base64Screenshot}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1000
+    };
+    
+    // Make the real API call
+    const apiResponse = await callOpenAI(BACKEND_CONFIG.MULTIMODAL_ENDPOINT, requestData);
+    
+    // Update status for processing the response
+    sendStatusUpdate(tabId, "Processing AI suggestions...");
+    
+    // Parse the response
+    return parseMultimodalResponse(apiResponse, screenshotUrl, hypothesis, false);
   } catch (error) {
     log("Error in createVariation:", error);
+    // Send error status to the popup
+    sendStatusUpdate(tabId, "error", error.message);
     throw error;
   }
 }
@@ -499,13 +772,13 @@ async function interpretHypothesis(hypothesis) {
       return mockApiResponse(hypothesis);
     }
     
-    // For a real implementation, this would call the API
+    // Prepare the request data
     const requestData = {
       model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: "You are a conversion rate optimization expert. Generate specific webpage modifications based on the user's hypothesis."
+          content: "You are a conversion rate optimization expert. Generate specific webpage modifications based on the user's hypothesis. Provide your response in a structured format with Summary and Suggestions sections. For each suggestion, specify both the target element and the recommended change."
         },
         {
           role: "user",
@@ -515,9 +788,11 @@ async function interpretHypothesis(hypothesis) {
       max_tokens: 500
     };
     
-    // TODO: Make real API call
-    // For now, return mock data
-    return mockApiResponse(hypothesis);
+    // Make the real API call
+    const apiResponse = await callOpenAI(BACKEND_CONFIG.HYPOTHESIS_ENDPOINT, requestData);
+    
+    // Parse the response
+    return parseTextResponse(apiResponse, hypothesis);
   } catch (error) {
     log("Error in interpretHypothesis:", error);
     throw error;
