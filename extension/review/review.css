@@ -8,7 +8,8 @@
 body {
   background-color: #f8f9fa;
   color: #212529;
-  padding: 20px;
+  padding: 0;
+  overflow-y: auto;
 }
 
 .container {
@@ -122,56 +123,35 @@ h3 {
 }
 
 .annotation-item {
-  background-color: #e9ecef;
-  border-left: 4px solid #0d6efd;
-  border-radius: 4px;
-  padding: 16px;
+  @apply bg-base-200 border-l-4 border-primary rounded p-4;
 }
 
 .annotation-title {
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #212529;
-  font-size: 16px;
+  @apply font-semibold mb-2 text-base;
 }
 
 .annotation-problem {
-  font-size: 14px;
-  color: #dc3545;
-  margin-bottom: 8px;
+  @apply text-error mb-2 text-sm;
 }
 
 .annotation-suggestion {
-  font-size: 14px;
-  color: #198754;
+  @apply text-success text-sm;
 }
 
 .change-item {
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  padding: 16px;
-  border: 1px solid #dee2e6;
+  @apply bg-base-100 rounded p-4 border border-base-300;
 }
 
 .change-title {
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #212529;
+  @apply font-semibold mb-2;
 }
 
 .change-element {
-  font-family: monospace;
-  font-size: 13px;
-  background-color: #f1f3f5;
-  padding: 4px 8px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  overflow-x: auto;
+  @apply font-mono text-xs bg-base-200 p-2 rounded mb-2 overflow-x-auto;
 }
 
 .change-action {
-  font-size: 14px;
-  color: #0d6efd;
+  @apply text-sm text-primary;
 }
 
 .loading-container {
@@ -250,123 +230,115 @@ button {
   background-color: #5c636a;
 }
 
+/* Custom styles that aren't covered by DaisyUI */
+
+/* Ensure all relevant classes for JavaScript functionality are preserved */
 .hidden {
-  display: none;
+  display: none !important;
+}
+
+/* Custom styling for screenshots */
+.screenshot img {
+  width: 100%;
+  display: block;
 }
 
 /* Export Dialog styles */
 .export-dialog {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(3px);
-  animation: fadeIn 0.2s ease-out;
+  @apply fixed inset-0 bg-black/70 flex items-center justify-center z-50;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+.export-dialog.show {
+  opacity: 1;
+  visibility: visible;
 }
 
 .export-content {
-  background-color: white;
-  border-radius: 8px;
-  padding: 20px;
-  width: 90%;
-  max-width: 400px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-}
-
-.export-content h2 {
-  margin-top: 0;
-  color: #333;
-  text-align: center;
-  margin-bottom: 20px;
-  font-size: 20px;
+  @apply bg-base-100 p-6 rounded-lg shadow-lg max-w-md w-full;
 }
 
 .export-options {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  @apply flex flex-wrap gap-4 mt-4;
 }
 
 .export-option-btn {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s ease;
-}
-
-.export-option-btn:hover {
-  background-color: #e9e9e9;
+  @apply btn btn-outline flex flex-col items-center justify-center p-4 flex-1 min-w-[120px];
 }
 
 .export-option-btn svg {
-  margin-right: 12px;
-  color: #555;
+  @apply mb-2 h-6 w-6;
 }
 
 .export-option-btn.export-cancel {
-  margin-top: 10px;
-  background-color: #f8f8f8;
-  color: #666;
-}
-
-.export-option-btn.export-cancel:hover {
-  background-color: #f0f0f0;
+  @apply btn btn-error btn-outline w-full mt-4;
 }
 
 /* Toast notification styles */
 .toast {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%) translateY(100px);
-  padding: 12px 20px;
-  border-radius: 6px;
-  color: white;
-  font-size: 14px;
-  max-width: 90%;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-  z-index: 1001;
+  @apply fixed bottom-5 right-5 p-4 rounded text-sm z-50 max-w-xs shadow-lg;
   opacity: 0;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transform: translateY(20px);
+  transition: opacity 0.3s, transform 0.3s;
 }
 
 .toast.show {
-  transform: translateX(-50%) translateY(0);
   opacity: 1;
+  transform: translateY(0);
 }
 
 .toast.success {
-  background-color: #2ecc71;
+  @apply bg-success text-success-content;
 }
 
 .toast.error {
-  background-color: #e74c3c;
+  @apply bg-error text-error-content;
 }
 
 .toast.warning {
-  background-color: #f39c12;
+  @apply bg-warning text-warning-content;
 }
 
 .toast.info {
-  background-color: #3498db;
+  @apply bg-info text-info-content;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Compatibility styles for JavaScript functionality */
+.no-screenshot {
+  @apply text-center italic py-8 text-base-content/60;
+}
+
+/* Override any conflicting legacy styles */
+.annotation-item {
+  @apply bg-base-200 border-l-4 border-primary rounded p-4;
+}
+
+.annotation-title {
+  @apply font-semibold mb-2 text-base;
+}
+
+.annotation-problem {
+  @apply text-error mb-2 text-sm;
+}
+
+.annotation-suggestion {
+  @apply text-success text-sm;
+}
+
+.change-item {
+  @apply bg-base-100 rounded p-4 border border-base-300;
+}
+
+.change-title {
+  @apply font-semibold mb-2;
+}
+
+.change-element {
+  @apply font-mono text-xs bg-base-200 p-2 rounded mb-2 overflow-x-auto;
+}
+
+.change-action {
+  @apply text-sm text-primary;
 } 

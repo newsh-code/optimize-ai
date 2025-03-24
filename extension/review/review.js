@@ -502,52 +502,62 @@ function exportAsHTML() {
   try {
     log("Exporting HTML report");
     
-    // Generate HTML content
-    const htmlContent = generateHTMLReport(reviewData);
-    
-    // Create a Blob with the HTML content
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    
-    // Create a URL for the Blob
-    const url = URL.createObjectURL(blob);
-    
-    // Generate filename
-    const filename = `optimizeai-report-${new Date().toISOString().split('T')[0]}.html`;
-    
-    // Try to use the Chrome Downloads API first
-    if (chrome.downloads && typeof chrome.downloads.download === 'function') {
-      chrome.downloads.download({
-        url: url,
-        filename: filename,
-        saveAs: true
-      }, () => {
-        // Revoke URL after download starts
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      });
+    // Get the current review data to ensure it's available
+    chrome.storage.local.get('currentReview', function(result) {
+      if (!result.currentReview) {
+        showToast("No review data found to export", "error");
+        return;
+      }
       
-      log("HTML report exported successfully via Chrome Downloads API");
-      showToast("HTML report exported successfully", "success");
-    } else {
-      // Fallback to using a regular anchor download if Chrome Downloads API is not available
-      log("Chrome Downloads API not available, using fallback download method");
+      const reviewData = result.currentReview;
       
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
+      // Generate HTML content with the reviewData
+      const htmlContent = generateHTMLReport(reviewData);
       
-      // Append to document, click and remove
-      document.body.appendChild(a);
-      a.click();
+      // Create a Blob with the HTML content
+      const blob = new Blob([htmlContent], { type: 'text/html' });
       
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 1000);
+      // Create a URL for the Blob
+      const url = URL.createObjectURL(blob);
       
-      log("HTML report exported successfully via fallback method");
-      showToast("HTML report exported successfully", "success");
-    }
+      // Generate filename
+      const filename = `optimizeai-report-${new Date().toISOString().split('T')[0]}.html`;
+      
+      // Try to use the Chrome Downloads API first
+      if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+        chrome.downloads.download({
+          url: url,
+          filename: filename,
+          saveAs: true
+        }, () => {
+          // Revoke URL after download starts
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+        
+        log("HTML report exported successfully via Chrome Downloads API");
+        showToast("HTML report exported successfully", "success");
+      } else {
+        // Fallback to using a regular anchor download if Chrome Downloads API is not available
+        log("Chrome Downloads API not available, using fallback download method");
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        
+        // Append to document, click and remove
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
+        
+        log("HTML report exported successfully via fallback method");
+        showToast("HTML report exported successfully", "success");
+      }
+    });
   } catch (error) {
     log("Error exporting HTML report:", error);
     showToast("Error exporting HTML report: " + error.message, "error");
@@ -559,30 +569,65 @@ function exportAsImages() {
   try {
     log("Exporting screenshots");
     
-    // Get before and after screenshots
-    const beforeImg = document.getElementById('before-screenshot');
-    const afterImg = document.getElementById('after-screenshot');
-    
-    if (!beforeImg.src && !afterImg.src) {
-      showToast("No screenshots available to export", "warning");
-      return;
-    }
-    
-    // Create a zip file if both screenshots are available
-    if (beforeImg.src && afterImg.src) {
-      // For now, we'll just download them individually
-      // In a future enhancement, we could use JSZip to package them together
-      downloadImage(beforeImg.src, 'before-screenshot.png');
-      setTimeout(() => {
-        downloadImage(afterImg.src, 'after-screenshot.png');
-      }, 1000); // Delay second download to avoid browser blocking
-    } else if (beforeImg.src) {
-      downloadImage(beforeImg.src, 'before-screenshot.png');
-    } else if (afterImg.src) {
-      downloadImage(afterImg.src, 'after-screenshot.png');
-    }
-    
-    showToast("Screenshots downloaded", "success");
+    // Get the current review data to ensure it's available
+    chrome.storage.local.get('currentReview', function(result) {
+      if (!result.currentReview) {
+        showToast("No review data found to export", "error");
+        return;
+      }
+      
+      const reviewData = result.currentReview;
+      const reviewId = reviewData.id;
+      
+      if (reviewId) {
+        // Get the screenshots
+        const screenshotKeys = [`screenshot_before_${reviewId}`, `screenshot_after_${reviewId}`];
+        chrome.storage.local.get(screenshotKeys, function(screenshotResult) {
+          const beforeScreenshot = screenshotResult[`screenshot_before_${reviewId}`];
+          const afterScreenshot = screenshotResult[`screenshot_after_${reviewId}`];
+          
+          if (!beforeScreenshot && !afterScreenshot) {
+            showToast("No screenshots available to export", "warning");
+            return;
+          }
+          
+          // Download the images
+          if (beforeScreenshot) {
+            downloadImage(beforeScreenshot, `optimizeai-before-${new Date().toISOString().split('T')[0]}.png`);
+          }
+          
+          if (afterScreenshot) {
+            // Slight delay for the second download to avoid browser blocking
+            setTimeout(() => {
+              downloadImage(afterScreenshot, `optimizeai-after-${new Date().toISOString().split('T')[0]}.png`);
+            }, 500);
+          }
+          
+          showToast("Screenshots exported successfully", "success");
+        });
+      } else {
+        // Fallback to images in the DOM if available
+        const beforeImg = document.getElementById('before-screenshot');
+        const afterImg = document.getElementById('after-screenshot');
+        
+        if (!beforeImg.src && !afterImg.src) {
+          showToast("No screenshots available to export", "warning");
+          return;
+        }
+        
+        if (beforeImg.src) {
+          downloadImage(beforeImg.src, `optimizeai-before-${new Date().toISOString().split('T')[0]}.png`);
+        }
+        
+        if (afterImg.src) {
+          setTimeout(() => {
+            downloadImage(afterImg.src, `optimizeai-after-${new Date().toISOString().split('T')[0]}.png`);
+          }, 500);
+        }
+        
+        showToast("Screenshots exported successfully", "success");
+      }
+    });
   } catch (error) {
     log("Error exporting screenshots:", error);
     showToast("Error exporting screenshots: " + error.message, "error");
@@ -596,17 +641,31 @@ function downloadImage(dataUrl, filename) {
       url: dataUrl,
       filename: filename,
       saveAs: false
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        log("Error downloading image:", chrome.runtime.lastError);
+        // Try fallback method
+        downloadImageFallback(dataUrl, filename);
+      } else {
+        log(`Image downloaded successfully with ID: ${downloadId}`);
+      }
     });
   } else {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-    }, 500);
+    // Fallback to using a regular anchor download
+    downloadImageFallback(dataUrl, filename);
   }
+}
+
+// Fallback download method
+function downloadImageFallback(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+  }, 500);
 }
 
 // Export code changes
@@ -614,72 +673,82 @@ function exportAsCode() {
   try {
     log("Exporting code changes");
     
-    // Check if we have suggested changes
-    if (!reviewData.suggestedChanges || reviewData.suggestedChanges.length === 0) {
-      showToast("No code changes to export", "warning");
-      return;
-    }
-    
-    // Generate modified code representation
-    const codeChanges = generateCodeChanges(reviewData.suggestedChanges);
-    
-    // Try to copy to clipboard
-    navigator.clipboard.writeText(codeChanges)
-      .then(() => {
-        showToast("Code changes copied to clipboard", "success");
-        log("Code changes copied to clipboard");
-      })
-      .catch((error) => {
-        log("Clipboard API failed, trying fallback method", error);
-        
-        // Fallback method - create a temporary textarea
-        const textarea = document.createElement('textarea');
-        textarea.value = codeChanges;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        
-        try {
-          const successful = document.execCommand('copy');
-          if (successful) {
-            showToast("Code changes copied to clipboard", "success");
-          } else {
-            throw new Error("execCommand copy failed");
+    // Get the current review data
+    chrome.storage.local.get('currentReview', function(result) {
+      if (!result.currentReview) {
+        showToast("No review data found to export", "error");
+        return;
+      }
+      
+      const reviewData = result.currentReview;
+      
+      // Check if we have suggested changes
+      if (!reviewData.suggestedChanges || reviewData.suggestedChanges.length === 0) {
+        showToast("No code changes to export", "warning");
+        return;
+      }
+      
+      // Generate modified code representation
+      const codeChanges = generateCodeChanges(reviewData.suggestedChanges);
+      
+      // Try to copy to clipboard
+      navigator.clipboard.writeText(codeChanges)
+        .then(() => {
+          showToast("Code changes copied to clipboard", "success");
+          log("Code changes copied to clipboard");
+        })
+        .catch((error) => {
+          log("Clipboard API failed, trying fallback method", error);
+          
+          // Fallback method - create a temporary textarea
+          const textarea = document.createElement('textarea');
+          textarea.value = codeChanges;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          
+          try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+              showToast("Code changes copied to clipboard", "success");
+            } else {
+              throw new Error("execCommand copy failed");
+            }
+          } catch (err) {
+            log("Fallback clipboard method failed", err);
+            
+            // If all else fails, offer download
+            const blob = new Blob([codeChanges], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const filename = `optimizeai-code-changes-${new Date().toISOString().split('T')[0]}.txt`;
+            
+            if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+              chrome.downloads.download({
+                url: url,
+                filename: filename,
+                saveAs: true
+              }, () => {
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              });
+            } else {
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }, 1000);
+            }
+            
+            showToast("Code changes saved as file", "info");
+          } finally {
+            document.body.removeChild(textarea);
           }
-        } catch (err) {
-          log("Fallback clipboard method failed", err);
-          
-          // If all else fails, offer download
-          const blob = new Blob([codeChanges], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const filename = `optimizeai-code-changes-${new Date().toISOString().split('T')[0]}.txt`;
-          
-          if (chrome.downloads && typeof chrome.downloads.download === 'function') {
-            chrome.downloads.download({
-              url: url,
-              filename: filename,
-              saveAs: true
-            }, () => {
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            });
-          } else {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            }, 1000);
-          }
-          
-          showToast("Code changes saved as file", "info");
-        } finally {
-          document.body.removeChild(textarea);
-        }
-      });
+        });
+    });
   } catch (error) {
     log("Error exporting code changes:", error);
     showToast("Error exporting code changes: " + error.message, "error");
